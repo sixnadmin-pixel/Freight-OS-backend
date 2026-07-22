@@ -23,7 +23,6 @@ class TarrifNew(BaseModel):
 class TariffPatch(BaseModel):
     lin_id : int | None = None
     tr_ln_id: int | None = None
-    updated_by: int
     emp_id_sales: int | None = None
     origin: str | None = None
     destination: str | None = None
@@ -41,7 +40,6 @@ class TariffPatch(BaseModel):
 
 class NACNew(BaseModel):
     cli_id: int
-    emp_id: int
     lin_id:int
     tr_ln_id: int
     nac_ref_id: str
@@ -59,7 +57,8 @@ class NACNew(BaseModel):
     note: str | None = None
     special_remark: str | None = None
     contracted_volume: int
-    updated_by: int
+    emp_id_sales: int
+    emp_id_cs: int
 
 
 class NACPatch(BaseModel):
@@ -83,6 +82,8 @@ class NACPatch(BaseModel):
     special_remark: str | None = None
     contracted_volume: int | None = None
     updated_by: int
+    emp_id_sales: int | None = None
+    emp_id_cs: int | None = None
 
 class ContractNew(BaseModel):
     lin_id: int

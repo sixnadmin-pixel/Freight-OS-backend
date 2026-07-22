@@ -7,12 +7,20 @@ from data.dbconn import pool
 from modules.helpers import build_insert
 from modules.kyc.api import IKYCModule
 from modules.kyc.client_kyc_types import KYCRequestNew, KYCRequestPatch, DocumentChecklistPatch
+from modules.client.api import IClientModule
+from modules.authen.api import IAuthnModule
+from modules.inquiry.inquiry_types import ContactNew
 
 class KYCModule(IKYCModule):
+    def __init__(self, client_module: IClientModule, authentication: IAuthnModule):
+        self.client = client_module
+        self.authn = authentication
+
     async def create_kyc_request(self, cli_id:int, payload: KYCRequestNew):
         data= {**payload.model_dump(exclude={'contact_person','docs'}), 'cli_id': cli_id}
         contact=payload.contact_person.model_dump() if payload.contact_person else None
         docs=payload.docs.model_dump()
+        emp_id=self.authn.get_current_user().emp_id
 
         if data is None:
             raise HTTPException(400, 'Missing fields...')
@@ -20,14 +28,12 @@ class KYCModule(IKYCModule):
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
-                   await cur.execute(build_insert('kyc_request', data,'kyc_id'),data)
+                   await cur.execute(build_insert('kyc_request', {**data, 'emp_id':emp_id},'kyc_id'),{**data, 'emp_id':emp_id})
                    row = await cur.fetchone()
 
-                #   TODO: talk to client module and use it to add contact person
-
                    if contact:
-                        pass
-
+                        await self.client.add_contact_person(cli_id, ContactNew(**contact))
+  
                    kyc_id=row['kyc_id']
 
                    if kyc_id:
@@ -46,9 +52,12 @@ class KYCModule(IKYCModule):
                 "constraint": e.diag.constraint_name,
                 "message": e.diag.message_primary,
             }) from e
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
 
     async def patch_kyc_request(self, kyc_id: int, payload: KYCRequestPatch):
         changes = payload.model_dump(exclude_unset=True)
+        updated_by= self.authn.get_current_user().emp_id
 
         if not changes:
             raise HTTPException(400, 'No fields provided for update...')
@@ -64,7 +73,7 @@ class KYCModule(IKYCModule):
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
-                    await cur.execute(query, {**changes, "kyc_id": kyc_id})
+                    await cur.execute(query, {**changes, "updated_by":updated_by, "kyc_id": kyc_id})
                     row = await cur.fetchone()
         except (psycopg.errors.ForeignKeyViolation,
                 psycopg.errors.CheckViolation,
@@ -73,6 +82,8 @@ class KYCModule(IKYCModule):
                 "constraint": e.diag.constraint_name,
                 "message": e.diag.message_primary,
             }) from e
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
 
         if row is None:
             raise HTTPException(404, f"KYC request {kyc_id} not found")
@@ -104,8 +115,11 @@ class KYCModule(IKYCModule):
                 "constraint": e.diag.constraint_name,
                 "message": e.diag.message_primary,
             }) from e
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
 
         if row is None:
             raise HTTPException(404, f"Document checklist {doc_id} not found for KYC request {kyc_id}")
         return row
+    
 

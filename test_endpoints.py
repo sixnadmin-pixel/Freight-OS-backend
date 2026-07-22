@@ -31,22 +31,33 @@ def safe_list_id(response, key, fallback=1):
 
 pr("GET /", requests.get(f"{BASE}/"))
 
+# -- liners --------------------------------------------------------------------
+
+r_liner = requests.post(f"{BASE}/liners", json={
+    "name": "MSC",
+    "has_portal": True,
+    "is_on_inttra": True
+})
+pr("POST /liners", r_liner)
+lin_id = safe_id(r_liner, "lin_id")
+
+r = requests.get(f"{BASE}/liners")
+pr("GET /liners", r)
+
 # -- clients -------------------------------------------------------------------
 
 r_client = requests.post(f"{BASE}/clients/clients", json={
-    "emp_id": 1,
     "name": "Acme Corp",
     "vat_no": "VAT-001",
     "tin": "TIN-001",
     "kyc_completed": False,
     "addr_street_ln": "1 Test Street",
     "addr_city": "Shanghai",
+    "addr_country": "LK",
     "primary_contact": {
         "name": "Alice Wong",
-        "emp_id": 1,
         "email": "alice@acme.com",
-        "whatsapp": "+8612345678",
-        "wechat": None
+        "whatsapp": "+8612345678"
     }
 })
 pr("POST /clients/clients", r_client)
@@ -67,6 +78,9 @@ r = requests.patch(f"{BASE}/clients/clients/{cli_id}/contacts/{cpid}", json={
     "email": "alice.chan@acme.com"
 })
 pr(f"PATCH /clients/clients/{cli_id}/contacts/{cpid}", r)
+
+r = requests.get(f"{BASE}/clients/clients/{cli_id}/kyc-status")
+pr(f"GET /clients/clients/{cli_id}/kyc-status", r)
 
 # -- inquiries -----------------------------------------------------------------
 
@@ -125,6 +139,9 @@ r = requests.patch(f"{BASE}/inquiries/inquiries/{inq_id}/containers/{cont_id}", 
 })
 pr(f"PATCH /inquiries/inquiries/{inq_id}/containers/{cont_id}", r)
 
+r = requests.get(f"{BASE}/inquiries/inquiries/{inq_id}")
+pr(f"GET /inquiries/inquiries/{inq_id}", r)
+
 # -- rates – tariff ------------------------------------------------------------
 
 r_tar = requests.post(f"{BASE}/rates/tariff-rates", json={
@@ -151,6 +168,15 @@ r = requests.patch(f"{BASE}/rates/tariff-rates/{tar_id}", json={
     "transit": "12 days"
 })
 pr(f"PATCH /rates/tariff-rates/{tar_id}", r)
+
+r = requests.get(f"{BASE}/rates/tariff-rates")
+pr("GET /rates/tariff-rates (valid)", r)
+
+r = requests.get(f"{BASE}/rates/tariff-rates/{tar_id}")
+pr(f"GET /rates/tariff-rates/{tar_id}", r)
+
+r = requests.delete(f"{BASE}/rates/tariff-rates/{tar_id}")
+pr(f"DELETE /rates/tariff-rates/{tar_id}", r)
 
 # -- rates – NAC ---------------------------------------------------------------
 
@@ -179,6 +205,18 @@ r = requests.patch(f"{BASE}/rates/nac-rates/{nac_id}", json={
     "contracted_volume": 60
 })
 pr(f"PATCH /rates/nac-rates/{nac_id}", r)
+
+r = requests.get(f"{BASE}/rates/nac-rates")
+pr("GET /rates/nac-rates (valid, current user)", r)
+
+r = requests.get(f"{BASE}/rates/nac-rates/{nac_id}")
+pr(f"GET /rates/nac-rates/{nac_id}", r)
+
+r = requests.get(f"{BASE}/rates/nac-rates/client/{cli_id}")
+pr(f"GET /rates/nac-rates/client/{cli_id}", r)
+
+r = requests.delete(f"{BASE}/rates/nac-rates/{nac_id}")
+pr(f"DELETE /rates/nac-rates/{nac_id}", r)
 
 # -- rates – contracted --------------------------------------------------------
 
@@ -211,6 +249,18 @@ r = requests.patch(f"{BASE}/rates/contracted-rates/{crate_id}", json={
 })
 pr(f"PATCH /rates/contracted-rates/{crate_id}", r)
 
+r = requests.get(f"{BASE}/rates/contracted-rates")
+pr("GET /rates/contracted-rates (valid, current user)", r)
+
+r = requests.get(f"{BASE}/rates/contracted-rates/{crate_id}")
+pr(f"GET /rates/contracted-rates/{crate_id}", r)
+
+r = requests.get(f"{BASE}/rates/contracted-rates/client/{cli_id}")
+pr(f"GET /rates/contracted-rates/client/{cli_id}", r)
+
+r = requests.delete(f"{BASE}/rates/contracted-rates/{crate_id}")
+pr(f"DELETE /rates/contracted-rates/{crate_id}", r)
+
 # -- rates – vessel ------------------------------------------------------------
 
 r_ves = requests.post(f"{BASE}/rates/vessel-rates", json={
@@ -242,6 +292,12 @@ r = requests.patch(f"{BASE}/rates/vessel-rates/{ves_srid}", json={
 })
 pr(f"PATCH /rates/vessel-rates/{ves_srid}", r)
 
+r = requests.get(f"{BASE}/rates/vessel-rates")
+pr("GET /rates/vessel-rates (valid)", r)
+
+r = requests.get(f"{BASE}/rates/rate/{ves_srid}", params={"rate_type": "vessel_by_vessel_rate"})
+pr(f"GET /rates/rate/{ves_srid}?rate_type=vessel_by_vessel_rate", r)
+
 r = requests.delete(f"{BASE}/rates/vessel-rates/{ves_srid}")
 pr(f"DELETE /rates/vessel-rates/{ves_srid}", r)
 
@@ -271,6 +327,12 @@ r = requests.patch(f"{BASE}/rates/fak-rates/{fak_srid}", json={
 })
 pr(f"PATCH /rates/fak-rates/{fak_srid}", r)
 
+r = requests.get(f"{BASE}/rates/fak-rates")
+pr("GET /rates/fak-rates (valid)", r)
+
+r = requests.get(f"{BASE}/rates/rate/{fak_srid}", params={"rate_type": "fak_rates"})
+pr(f"GET /rates/rate/{fak_srid}?rate_type=fak_rates", r)
+
 r = requests.delete(f"{BASE}/rates/fak-rates/{fak_srid}")
 pr(f"DELETE /rates/fak-rates/{fak_srid}", r)
 
@@ -299,6 +361,12 @@ r = requests.patch(f"{BASE}/rates/special-rates/{spc_sprid}", json={
     "rate": 1050.00
 })
 pr(f"PATCH /rates/special-rates/{spc_sprid}", r)
+
+r = requests.get(f"{BASE}/rates/special-rates")
+pr("GET /rates/special-rates (valid)", r)
+
+r = requests.get(f"{BASE}/rates/rate/{spc_sprid}", params={"rate_type": "special_rate"})
+pr(f"GET /rates/rate/{spc_sprid}?rate_type=special_rate", r)
 
 r = requests.delete(f"{BASE}/rates/special-rates/{spc_sprid}")
 pr(f"DELETE /rates/special-rates/{spc_sprid}", r)
@@ -338,11 +406,9 @@ pr(f"DELETE /rate-requests/{request_id}", r)
 
 # -- KYC ----------------------------------------------------------------------
 
-r_kyc = requests.post(f"{BASE}/kyc/kyc-requests", json={
-    "cli_id": cli_id,
+r_kyc = requests.post(f"{BASE}/kyc/kyc-requests", params={"cli_id": cli_id}, json={
     "br_number": "BR-2025-001",
     "parent_organization": "Acme Holdings",
-    "emp_id": 1,
     "emp_id_sales": 1,
     "document_submission_deadline": "2025-06-30",
     "cli_type": "shipper",
@@ -354,7 +420,6 @@ r_kyc = requests.post(f"{BASE}/kyc/kyc-requests", json={
     "general_cargo": True,
     "contact_person": {
         "name": "Alice Wong",
-        "emp_id": 1,
         "email": "alice@acme.com"
     },
     "docs": {

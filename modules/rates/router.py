@@ -16,6 +16,19 @@ def get_rates_module() -> IRatesModule:
 
 # --- Tariff Rates ---
 
+@router.get("/tariff-rates")
+async def list_tariff_rates(
+    service: IRatesMasterModule = Depends(get_rates_master_module)
+):
+    return await service.read_all_tariff_rates()
+
+@router.get("/tariff-rates/{tar_id}")
+async def get_tariff_rate(
+    tar_id: int,
+    service: IRatesMasterModule = Depends(get_rates_master_module)
+):
+    return await service.read_tariff_rate(tar_id)
+
 @router.post("/tariff-rates", status_code=201)
 async def create_tariff(
     payload: TarrifNew,
@@ -31,8 +44,35 @@ async def update_tariff(
 ):
     return await service.patch_tariff_rate(tar_id, payload)
 
+@router.delete("/tariff-rates/{tar_id}", status_code=200)
+async def remove_tariff(
+    tar_id: int,
+    service: IRatesMasterModule = Depends(get_rates_master_module)
+):
+    return await service.delete_tariff_rate(tar_id)
+
 
 # --- NAC Rates ---
+
+@router.get("/nac-rates")
+async def list_nac_rates(
+    service: IRatesMasterModule = Depends(get_rates_master_module)
+):
+    return await service.read_all_nac_rates()
+
+@router.get("/nac-rates/client/{cli_id}")
+async def list_client_nac_rates(
+    cli_id: int,
+    service: IRatesMasterModule = Depends(get_rates_master_module)
+):
+    return await service.read_client_nac_rates(cli_id)
+
+@router.get("/nac-rates/{nac_id}")
+async def get_nac_rate(
+    nac_id: int,
+    service: IRatesMasterModule = Depends(get_rates_master_module)
+):
+    return await service.read_nac_rate(nac_id)
 
 @router.post("/nac-rates", status_code=201)
 async def create_nac(
@@ -49,8 +89,35 @@ async def update_nac(
 ):
     return await service.patch_nac_rate(nac_id, payload)
 
+@router.delete("/nac-rates/{nac_id}", status_code=200)
+async def remove_nac(
+    nac_id: int,
+    service: IRatesMasterModule = Depends(get_rates_master_module)
+):
+    return await service.delete_nac_rate(nac_id)
+
 
 # --- Contracted Rates ---
+
+@router.get("/contracted-rates")
+async def list_contracted_rates(
+    service: IRatesMasterModule = Depends(get_rates_master_module)
+):
+    return await service.read_all_contracted_rates()
+
+@router.get("/contracted-rates/client/{cli_id}")
+async def list_client_contracted_rates(
+    cli_id: int,
+    service: IRatesMasterModule = Depends(get_rates_master_module)
+):
+    return await service.read_client_contracted_rates(cli_id)
+
+@router.get("/contracted-rates/{crate_id}")
+async def get_contracted_rate(
+    crate_id: int,
+    service: IRatesMasterModule = Depends(get_rates_master_module)
+):
+    return await service.read_contracted_rate(crate_id)
 
 @router.post("/contracted-rates", status_code=201)
 async def create_contract(
@@ -66,6 +133,13 @@ async def update_contract(
     service: IRatesMasterModule = Depends(get_rates_master_module)
 ):
     return await service.patch_contracted_rate(crate_id, payload)
+
+@router.delete("/contracted-rates/{crate_id}", status_code=200)
+async def remove_contract(
+    crate_id: int,
+    service: IRatesMasterModule = Depends(get_rates_master_module)
+):
+    return await service.delete_contracted_rate(crate_id)
 
 
 # --- Vessel-by-Vessel Rates ---
@@ -93,7 +167,33 @@ async def remove_vessel_rate(
     return await service.delete_vessel_rate(srid)
 
 
+# --- Single non-persistent rate lookup ---
+
+@router.get("/rate/{rate_id}")
+async def get_non_persistent_rate(
+    rate_id: int,
+    rate_type: str,
+    service: IRatesModule = Depends(get_rates_module)
+):
+    return await service.read_non_persistent_rate(rate_id, rate_type)
+
+
+# --- Vessel-by-Vessel Rates (read all) ---
+
+@router.get("/vessel-rates")
+async def list_vessel_rates(
+    service: IRatesModule = Depends(get_rates_module)
+):
+    return await service.read_all_vessel_rates()
+
+
 # --- FAK Rates ---
+
+@router.get("/fak-rates")
+async def list_fak_rates(
+    service: IRatesModule = Depends(get_rates_module)
+):
+    return await service.read_all_fak_rates()
 
 @router.post("/fak-rates", status_code=201)
 async def create_fak_rate(
@@ -119,6 +219,12 @@ async def remove_fak_rate(
 
 
 # --- Special Rates ---
+
+@router.get("/special-rates")
+async def list_special_rates(
+    service: IRatesModule = Depends(get_rates_module)
+):
+    return await service.read_all_special_rates()
 
 @router.post("/special-rates", status_code=201)
 async def create_special_rate(

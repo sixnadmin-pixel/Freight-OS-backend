@@ -10,12 +10,11 @@ class ClientNew(BaseModel):
 
 
 class ContactNew(BaseModel):
-    # emp_id of the person who recoded the inquiry not client's
-    emp_id: int | None = None
     name: str
     designation: str | None = None
     email: str | None = None
     whatsapp: str | None = None
+    phone: str | None = None
     wechat: str | None = None
 
 
@@ -41,7 +40,6 @@ class ContainerNew(BaseModel):
 
 
 class InquiryFields(BaseModel):
-    emp_id: int | None = None
     sbu: str | None = None
     remark: str | None = None
     origin: str                           # NOT NULL, FK -> port(unlocode)
@@ -82,7 +80,6 @@ class InquiryOldOld(BaseModel):
 # Patch an inquiry
 
 class InquiryPatch(BaseModel):
-    updated_by:int
     sbu: str | None = None
     remark: str | None = None
     origin: str | None = None                         # NOT NULL, FK -> port(unlocode)
@@ -110,3 +107,18 @@ class ContainerPatch(BaseModel):
     zip_code: str | None = None
     is_fully_loaded: bool = False
     free_time: str | None = None
+
+class InquiryView(BaseModel):
+    sbu: str | None = None
+    remark: str | None = None
+    origin: str                           # NOT NULL, FK -> port(unlocode)
+    incoterm: str | None = None
+    cargo_ready_date: date | None = None
+    priority: str | None = None
+    preferred_liners: str | None = None
+    preferred_rate: float | None = None
+    service_mode: Literal["DOOR_TO_DOOR", "PORT_TO_PORT"] | None = None
+    contact: ContactNew
+    commodity: CommodityNew
+    container: ContainerNew
+

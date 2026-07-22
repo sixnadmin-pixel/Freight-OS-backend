@@ -14,7 +14,6 @@ class DocumentChecklist(BaseModel):
 class KYCRequestNew(BaseModel):
     br_number: str
     parent_organization: str | None = None
-    emp_id: int 
     emp_id_sales: int | None = None
     emp_id_cs: int | None = None
     document_submission_deadline: date
@@ -65,7 +64,6 @@ class  KYCRequestPatch(BaseModel):
     general_cargo: bool = False
     dangerous_goods: bool = False
     perishable_goods: bool = False
-    updated_by: int
 
 
 

@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from modules.inquiry.inquiry_types import ContactNew
 
 class ClientNew(BaseModel):
-    emp_id:int
     name: str
     assigned_to: int | None= None
     vat_no: str | None = None
@@ -16,7 +15,6 @@ class ClientNew(BaseModel):
 
 
 class ClientPatch(BaseModel):
-    updated_by:int
     name: str | None = None
     vat_no: str | None = None
     tin: str | None = None
@@ -25,9 +23,12 @@ class ClientPatch(BaseModel):
     addr_city:str
 
 class ContactPatch(BaseModel):
-    updated_by:int
     name: str | None = None
-    emp_id: int | None = None
+    designation : str | None = None
     email: str | None = None
     whatsapp: str | None = None
+    phone: str | None = None
     wechat: str | None = None
+
+class KYCStatusPatch(BaseModel):
+    kyc_completed: bool = True

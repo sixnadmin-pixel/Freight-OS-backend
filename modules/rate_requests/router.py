@@ -13,6 +13,12 @@ def get_rate_request_module() -> IRateRequestModule:
 
 # --- Rate Requests ---
 
+@router.get("/incoming")
+async def list_incoming_requests(
+    service: IRateRequestModule = Depends(get_rate_request_module)
+):
+    return await service.read_incoming_requests()
+
 @router.post("", status_code=201)
 async def create_rate_request(
     payload: RateRequestNew, 

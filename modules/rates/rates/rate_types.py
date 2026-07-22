@@ -15,7 +15,6 @@ class VesselByVesselRateNew(BaseModel):
     destination : str
     tr_ln_id: int
     iwe: str | None = None
-    emp_id: int
     free_days: str | None = None
     container_type : str
     volume: int
@@ -53,13 +52,11 @@ class VesselByVesselRatePatch(BaseModel):
     iscancelled: bool | None = None
     cancellationreason: str | None = None
     cancellationfee: float | None = None
-    updated_by: int
 
 class FAKRatesNew(BaseModel):
     lin_id: int
     tr_ln_id: int
     inq_id: int
-    emp_id: int
     valid_from : datetime 
     valid_to : datetime 
     volume: int
@@ -81,7 +78,6 @@ class FAKRatesPatch(BaseModel):
     lin_id: int | None=None
     tr_ln_id: int | None=None
     inq_id: int | None=None
-    updated_by: int
     valid_from : datetime | None=None
     valid_to : datetime | None=None
     volume: int | None=None
@@ -102,7 +98,6 @@ class SpecialRateNew(BaseModel):
     lin_id: int
     tr_ln_id: int
     inq_id: int
-    emp_id: int
     com_id: int
     valid_from : datetime 
     valid_to : datetime 
@@ -124,7 +119,6 @@ class SpecialRatePatch(BaseModel):
     lin_id: int | None=None
     tr_ln_id: int | None=None
     inq_id: int | None=None
-    updated_by: int 
     com_id: int | None=None
     valid_from : datetime  | None=None
     valid_to : datetime | None=None

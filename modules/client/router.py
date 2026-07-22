@@ -32,3 +32,23 @@ async def update_contact(
     service: IClientModule = Depends(get_client_module)
 ):
     return await service.patch_contact_person(cli_id, cpid, payload)
+
+@router.get("/clients", status_code=200)
+async def read_all_clients(
+    service: IClientModule = Depends(get_client_module)
+):
+    return await service.read_all_clients()
+
+@router.get("/clients/{cli_id}/contacts", status_code=200)
+async def read_contacts(
+    cli_id: int,
+    service: IClientModule = Depends(get_client_module)
+):
+    return await service.fetch_all_contacts(cli_id)
+
+@router.get("/clients/{cli_id}/kyc-status", status_code=200)
+async def read_kyc_status(
+    cli_id: int,
+    service: IClientModule = Depends(get_client_module)
+):
+    return await service.read_kyc_status(cli_id)
