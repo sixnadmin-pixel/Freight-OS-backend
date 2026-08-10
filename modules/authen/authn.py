@@ -11,6 +11,7 @@ TEST_USERS = {
     6: {"emp_id": 6, "name": "fin-test", "desig": "exec", "dept": "finance"},
     7: {"emp_id": 7, "name": "cs-test", "desig": "exec", "dept": "cusomer-service"},
     8: {"emp_id": 8, "name": "sales-test", "desig": "exec", "dept": "sales"},
+    9: {"emp_id": 9, "name": "IT-AD", "desig": None, "dept": "IT", "mail_id": "niranja@clsynergy.com"},
 }
 
 

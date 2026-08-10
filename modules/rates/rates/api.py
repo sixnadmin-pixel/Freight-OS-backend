@@ -1,5 +1,5 @@
 from typing import Protocol
-from modules.rates.rates.rate_types import VesselByVesselRateNew, VesselByVesselRatePatch, FAKRatesNew, FAKRatesPatch, SpecialRateNew, SpecialRatePatch
+from modules.rates.rate_types import VesselByVesselRateNew, VesselByVesselRatePatch, FAKRatesNew, FAKRatesPatch, SpecialRateNew, SpecialRatePatch
 
 class IRatesModule(Protocol):
     async def add_vessel_rate(self, payload: VesselByVesselRateNew) -> dict: ...

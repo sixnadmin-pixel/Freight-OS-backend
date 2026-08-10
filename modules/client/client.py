@@ -4,7 +4,7 @@ from psycopg.rows import dict_row
 from fastapi import HTTPException
 
 from data.dbconn import pool
-from modules.helpers import build_insert
+from utils.helpers import build_insert
 from modules.client.api import IClientModule
 from modules.authen.api import IAuthnModule
 from modules.client.client_types import ClientNew, ClientPatch, ContactPatch, KYCStatusPatch
@@ -91,7 +91,7 @@ class ClientModule(IClientModule):
         emp_id= self.authen.get_current_user().emp_id
 
         QUERY="""
-              SELECT cli_id, name FROM client WHERE assigned_to=%(emp_id)s
+              SELECT cli_id, name FROM client
               """
         try:
             async with pool.connection() as conn:

@@ -5,20 +5,23 @@ from psycopg.rows import dict_row
 from fastapi import HTTPException
 
 from data.dbconn import pool
-from modules.helpers import build_insert
+from utils.helpers import build_insert
 from modules.rate_requests.api import IRateRequestModule
 from modules.authen.api import IAuthnModule
+from modules.inquiry.activity_log.api import IAcitivityLog
+from modules.inquiry.activity_log.activity_types import WorkflowStage, WorkflowStatusPatch
 from modules.rate_requests.rate_request_types import RateRequestNew, RateRequestOptionNew, RateRequestOptionPatch
 
 class RateRequestModule(IRateRequestModule):
-    def __init__(self, authentication: IAuthnModule):
+    def __init__(self, authentication: IAuthnModule, activity_log: IAcitivityLog):
         self.authn=authentication
+        self.activity_log=activity_log
 
     async def add_rate_request(
             self,
             payload: RateRequestNew
     )->dict:
-        request_data=payload.model_dump()
+        request_data = payload.model_dump()
         emp_id_requester = self.authn.get_current_user().emp_id
 
         try:
@@ -29,7 +32,12 @@ class RateRequestModule(IRateRequestModule):
                     await cur.execute(build_insert('rate_request', {**request_data, 'emp_id_requester':emp_id_requester}, "request_id"), {**request_data, 'emp_id_requester':emp_id_requester})
                     request_id=(await cur.fetchone())['request_id']
 
-                    return {"request_id":request_id}
+            await self.activity_log.update_workflow_status(
+                payload.inq_id,
+                WorkflowStatusPatch(stage=WorkflowStage.escalated_to_procurement)
+            )
+
+            return {"request_id": request_id}
                 
         except (psycopg.errors.ForeignKeyViolation,
                 psycopg.errors.CheckViolation,
@@ -83,7 +91,18 @@ class RateRequestModule(IRateRequestModule):
                     await cur.execute(build_insert('rate_request_option', data, 'option_id'), data)
                     option_id=(await cur.fetchone())['option_id']
 
-                    return {'option_id':option_id}
+                    await cur.execute(
+                        "UPDATE rate_request SET is_given = true WHERE request_id = %(request_id)s RETURNING inq_id",
+                        {"request_id": request_id}
+                    )
+                    inq_id = (await cur.fetchone())['inq_id']
+
+            await self.activity_log.update_workflow_status(
+                inq_id,
+                WorkflowStatusPatch(stage=WorkflowStage.quotation_prep)
+            )
+
+            return {'option_id': option_id}
                 
         except (psycopg.errors.ForeignKeyViolation,
                 psycopg.errors.CheckViolation,
@@ -117,6 +136,23 @@ class RateRequestModule(IRateRequestModule):
                         {'request_id': request_id, 'option_id': option_id}
                     )
                     row = await cur.fetchone()
+
+                    if row:
+                        await cur.execute(
+                            "SELECT COUNT(*) AS cnt FROM rate_request_option WHERE request_id = %(request_id)s",
+                            {"request_id": request_id}
+                        )
+                        remaining = (await cur.fetchone())['cnt']
+                        if remaining == 0:
+                            await cur.execute(
+                                "UPDATE rate_request SET is_given = false WHERE request_id = %(request_id)s RETURNING inq_id",
+                                {"request_id": request_id}
+                            )
+                            inq_id = (await cur.fetchone())['inq_id']
+                            await self.activity_log.update_workflow_status(
+                                inq_id,
+                                WorkflowStatusPatch(stage=WorkflowStage.escalated_to_procurement)
+                            )
         except psycopg.OperationalError as e:
             raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
 

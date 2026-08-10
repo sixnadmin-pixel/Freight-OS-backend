@@ -3,7 +3,7 @@ from psycopg.rows import dict_row
 from fastapi import HTTPException
 
 from data.dbconn import pool
-from modules.helpers import build_insert
+from utils.helpers import build_insert
 from modules.liners.api import ILinersModule
 from modules.authen.api import IAuthnModule
 from modules.liners.liner_types import LinerNew

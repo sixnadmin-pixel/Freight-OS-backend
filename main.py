@@ -1,3 +1,8 @@
+import sys
+import asyncio
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -22,6 +27,9 @@ from modules.kyc.client_kyc import KYCModule
 
 from modules.liners.router import router as liners_router, get_liners_module
 from modules.liners.liners import LinersModule
+
+from modules.quotation.router import router as quotation_router, get_quotation_module
+from modules.quotation.quotation import QuotationModule
 
 from modules.authen.router import router as authn_router, get_authn_module
 from modules.authen.authn import AuthnModule
@@ -51,14 +59,15 @@ app.add_middleware(
 
 # services
 authn_service = AuthnModule()
-inquiry_service = InquiryModule(authn_service)
+activity_log_service = ActivityLogModule()
+inquiry_service = InquiryModule(authn_service, activity_log_service)
 client_service = ClientModule(authn_service)
 rates_master_service = RatesMasterModule(authn_service)
 rates_service = RatesModule(authn_service)
-rate_request_service = RateRequestModule(authn_service)
+rate_request_service = RateRequestModule(authn_service, activity_log_service)
 kyc_service = KYCModule(client_service, authn_service)
 liners_service = LinersModule(authn_service)
-activity_log_service = ActivityLogModule()
+quotation_service = QuotationModule(authn_service, activity_log_service)
 
 app.dependency_overrides[get_inquiry_module] = lambda: inquiry_service
 app.dependency_overrides[get_client_module] = lambda: client_service
@@ -68,6 +77,7 @@ app.dependency_overrides[get_rate_request_module] = lambda: rate_request_service
 app.dependency_overrides[get_kyc_module] = lambda: kyc_service
 app.dependency_overrides[get_liners_module] = lambda: liners_service
 app.dependency_overrides[get_activity_log_module] = lambda: activity_log_service
+app.dependency_overrides[get_quotation_module] = lambda: quotation_service
 app.dependency_overrides[get_authn_module] = lambda: authn_service
 
 
@@ -78,6 +88,7 @@ app.include_router(rates_router)
 app.include_router(rate_requests_router)
 app.include_router(kyc_router)
 app.include_router(liners_router)
+app.include_router(quotation_router)
 app.include_router(authn_router)
 
 @app.get("/")

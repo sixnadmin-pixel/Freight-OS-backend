@@ -4,10 +4,10 @@ from psycopg.rows import dict_row
 from fastapi import HTTPException
 
 from data.dbconn import pool
-from modules.helpers import build_insert
+from utils.helpers import build_insert
 from modules.rates.rates_master.api import IRatesMasterModule
 from modules.authen.api import IAuthnModule
-from modules.rates.rates_master.rate_types import TarrifNew, TariffPatch, NACNew, NACPatch, ContractNew, ContractPatch
+from modules.rates.rate_types import TarrifNew, TariffPatch, NACNew, NACPatch, ContractNew, ContractPatch, SurchargeNew, SurchargePatch
 
 
 class RatesMasterModule(IRatesMasterModule):
@@ -15,8 +15,9 @@ class RatesMasterModule(IRatesMasterModule):
         self.authn = authentication
         
     async def add_tariff_rate(self, payload: TarrifNew) -> dict:
-        data = payload.model_dump()
+        data = payload.model_dump(exclude={'surcharges'})
         data["emp_id_sales"] = data.pop("salesperson")
+        surcharges = payload.surcharges
         emp_id = self.authn.get_current_user().emp_id
 
         try:
@@ -24,6 +25,13 @@ class RatesMasterModule(IRatesMasterModule):
                 async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(build_insert("tariff_rates", {**data, "emp_id":emp_id}, "tar_id"), {**data, "emp_id":emp_id})
                     row = await cur.fetchone()
+                    tar_id = row["tar_id"]
+
+                    if surcharges:
+                        for s in surcharges:
+                            s_data = {**s.model_dump(), "rate_id": tar_id}
+                            await cur.execute(build_insert("surcharge", s_data), s_data)
+
             return row
 
         except (psycopg.errors.ForeignKeyViolation,
@@ -42,25 +50,53 @@ class RatesMasterModule(IRatesMasterModule):
             raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
 
     async def patch_tariff_rate(self, tar_id: int, payload: TariffPatch) -> dict:
-        changes = payload.model_dump(exclude_unset=True)
+        changes = payload.model_dump(exclude_unset=True, exclude={'surcharges'})
+        surcharges = payload.surcharges if 'surcharges' in payload.model_fields_set else None
         updated_by= self.authn.get_current_user().emp_id
 
-        if not changes:
+        if not changes and surcharges is None:
             raise HTTPException(400, "No fields provided for update...")
-
-        set_clause = sql.SQL(", ").join(
-            sql.SQL("{} = {}").format(sql.Identifier(col), sql.Placeholder(col))
-            for col in changes
-        )
-        query = sql.SQL(
-            "UPDATE tariff_rates SET {} WHERE tar_id = {} RETURNING *"
-        ).format(set_clause, sql.Placeholder("tar_id"))
 
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
-                    await cur.execute(query, {**changes, "tar_id": tar_id, "updated_by":updated_by})
-                    row = await cur.fetchone()
+                    if changes:
+                        set_clause = sql.SQL(", ").join(
+                            sql.SQL("{} = {}").format(sql.Identifier(col), sql.Placeholder(col))
+                            for col in changes
+                        )
+                        query = sql.SQL(
+                            "UPDATE tariff_rates SET {} WHERE tar_id = {} RETURNING *"
+                        ).format(set_clause, sql.Placeholder("tar_id"))
+                        await cur.execute(query, {**changes, "tar_id": tar_id, "updated_by":updated_by})
+                        row = await cur.fetchone()
+                    else:
+                        await cur.execute(
+                            "SELECT * FROM tariff_rates WHERE tar_id = %s", (tar_id,)
+                        )
+                        row = await cur.fetchone()
+
+                    if row is None:
+                        raise HTTPException(404, f"Tariff rate {tar_id} not found")
+
+                    if surcharges is not None:
+                        for s in surcharges:
+                            s_changes = s.model_dump(exclude_unset=True, exclude={'sur_id'})
+                            if not s_changes:
+                                continue
+                            s_set = sql.SQL(", ").join(
+                                sql.SQL("{} = {}").format(sql.Identifier(col), sql.Placeholder(col))
+                                for col in s_changes
+                            )
+                            s_query = sql.SQL(
+                                "UPDATE surcharge SET {} WHERE sur_id = {} RETURNING *"
+                            ).format(s_set, sql.Placeholder("sur_id"))
+                            await cur.execute(s_query, {**s_changes, "sur_id": s.sur_id})
+
+            return row
+
+        except HTTPException:
+            raise
         except (psycopg.errors.ForeignKeyViolation,
                 psycopg.errors.CheckViolation) as e:
             raise HTTPException(422, {
@@ -70,12 +106,9 @@ class RatesMasterModule(IRatesMasterModule):
         except psycopg.OperationalError as e:
             raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
 
-        if row is None:
-            raise HTTPException(404, f"Tariff rate {tar_id} not found")
-        return row
-
     async def add_nac_rate(self, payload: NACNew) -> dict:
-        data = payload.model_dump()
+        data = payload.model_dump(exclude={'surcharges'})
+        surcharges = payload.surcharges
         emp_id= self.authn.get_current_user().emp_id
 
         try:
@@ -83,6 +116,13 @@ class RatesMasterModule(IRatesMasterModule):
                 async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(build_insert("nac", {**data, "emp_id":emp_id}, "nac_id"), {**data, "emp_id":emp_id})
                     row = await cur.fetchone()
+                    nac_id = row["nac_id"]
+
+                    if surcharges:
+                        for s in surcharges:
+                            s_data = {**s.model_dump(), "rate_id": nac_id}
+                            await cur.execute(build_insert("surcharge", s_data), s_data)
+
             return row
 
         except (psycopg.errors.ForeignKeyViolation,
@@ -101,25 +141,53 @@ class RatesMasterModule(IRatesMasterModule):
             raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
 
     async def patch_nac_rate(self, nac_id: int, payload: NACPatch) -> dict:
-        changes = payload.model_dump(exclude_unset=True)
+        changes = payload.model_dump(exclude_unset=True, exclude={'surcharges'})
+        surcharges = payload.surcharges if 'surcharges' in payload.model_fields_set else None
         updated_by = self.authn.get_current_user().emp_id
 
-        if not changes:
+        if not changes and surcharges is None:
             raise HTTPException(400, "No fields provided for update...")
-
-        set_clause = sql.SQL(", ").join(
-            sql.SQL("{} = {}").format(sql.Identifier(col), sql.Placeholder(col))
-            for col in changes
-        )
-        query = sql.SQL(
-            "UPDATE nac SET {} WHERE nac_id = {} RETURNING *"
-        ).format(set_clause, sql.Placeholder("nac_id"))
 
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
-                    await cur.execute(query, {**changes, "nac_id": nac_id, "updated_by": updated_by})
-                    row = await cur.fetchone()
+                    if changes:
+                        set_clause = sql.SQL(", ").join(
+                            sql.SQL("{} = {}").format(sql.Identifier(col), sql.Placeholder(col))
+                            for col in changes
+                        )
+                        query = sql.SQL(
+                            "UPDATE nac SET {} WHERE nac_id = {} RETURNING *"
+                        ).format(set_clause, sql.Placeholder("nac_id"))
+                        await cur.execute(query, {**changes, "nac_id": nac_id, "updated_by": updated_by})
+                        row = await cur.fetchone()
+                    else:
+                        await cur.execute(
+                            "SELECT * FROM nac WHERE nac_id = %s", (nac_id,)
+                        )
+                        row = await cur.fetchone()
+
+                    if row is None:
+                        raise HTTPException(404, f"NAC rate {nac_id} not found")
+
+                    if surcharges is not None:
+                        for s in surcharges:
+                            s_changes = s.model_dump(exclude_unset=True, exclude={'sur_id'})
+                            if not s_changes:
+                                continue
+                            s_set = sql.SQL(", ").join(
+                                sql.SQL("{} = {}").format(sql.Identifier(col), sql.Placeholder(col))
+                                for col in s_changes
+                            )
+                            s_query = sql.SQL(
+                                "UPDATE surcharge SET {} WHERE sur_id = {} RETURNING *"
+                            ).format(s_set, sql.Placeholder("sur_id"))
+                            await cur.execute(s_query, {**s_changes, "sur_id": s.sur_id})
+
+            return row
+
+        except HTTPException:
+            raise
         except (psycopg.errors.ForeignKeyViolation,
                 psycopg.errors.CheckViolation) as e:
             raise HTTPException(422, {
@@ -129,13 +197,10 @@ class RatesMasterModule(IRatesMasterModule):
         except psycopg.OperationalError as e:
             raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
 
-        if row is None:
-            raise HTTPException(404, f"NAC rate {nac_id} not found")
-        return row
-
     async def add_contracted_rate(self, payload: ContractNew) -> dict:
-        contract = payload.model_dump(exclude={'client_ids'})
+        contract = payload.model_dump(exclude={'client_ids', 'surcharges'})
         client_ids = payload.client_ids
+        surcharges = payload.surcharges
         emp_id= self.authn.get_current_user().emp_id
 
         try:
@@ -150,6 +215,12 @@ class RatesMasterModule(IRatesMasterModule):
                                VALUES (%s, %s)""",
                             [(crate_id, c) for c in client_ids],
                         )
+
+                    if surcharges:
+                        for s in surcharges:
+                            s_data = {**s.model_dump(), "rate_id": crate_id}
+                            await cur.execute(build_insert("surcharge", s_data), s_data)
+
                     return {'crate_id': crate_id, 'client_ids': client_ids}
 
         except (psycopg.errors.ForeignKeyViolation,
@@ -168,12 +239,13 @@ class RatesMasterModule(IRatesMasterModule):
             raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
 
     async def patch_contracted_rate(self, crate_id: int, payload: ContractPatch) -> dict:
-        changes = payload.model_dump(exclude_unset=True, exclude={'client_ids'})
+        changes = payload.model_dump(exclude_unset=True, exclude={'client_ids', 'surcharges'})
         clients = payload.client_ids
+        surcharges = payload.surcharges if 'surcharges' in payload.model_fields_set else None
         updated_by= self.authn.get_current_user().emp_id
 
-        if not changes and clients is None:
-            raise HTTPException(400, "No fields or clients provided for update")
+        if not changes and clients is None and surcharges is None:
+            raise HTTPException(400, "No fields, clients, or surcharges provided for update")
 
         try:
             async with pool.connection() as conn:
@@ -188,13 +260,11 @@ class RatesMasterModule(IRatesMasterModule):
                         ).format(set_clause, sql.Placeholder("crate_id"))
                         await cur.execute(query, {**changes, 'crate_id': crate_id, "updated_by":updated_by})
                         row = await cur.fetchone()
-
-                        # TODO research here
-                    # else:
-                    #     await cur.execute(
-                    #         "SELECT * FROM contracted_rates WHERE crate_id = %s", (crate_id,)
-                    #     )
-                    #     row = await cur.fetchone()
+                    else:
+                        await cur.execute(
+                            "SELECT * FROM contracted_rates WHERE crate_id = %s", (crate_id,)
+                        )
+                        row = await cur.fetchone()
 
                     if row is None:
                         raise HTTPException(404, f"Contracted rate {crate_id} not found")
@@ -211,6 +281,20 @@ class RatesMasterModule(IRatesMasterModule):
                                 [(crate_id, c) for c in clients],
                             )
                         row['clients'] = clients
+
+                    if surcharges is not None:
+                        for s in surcharges:
+                            s_changes = s.model_dump(exclude_unset=True, exclude={'sur_id'})
+                            if not s_changes:
+                                continue
+                            s_set = sql.SQL(", ").join(
+                                sql.SQL("{} = {}").format(sql.Identifier(col), sql.Placeholder(col))
+                                for col in s_changes
+                            )
+                            s_query = sql.SQL(
+                                "UPDATE surcharge SET {} WHERE sur_id = {} RETURNING *"
+                            ).format(s_set, sql.Placeholder("sur_id"))
+                            await cur.execute(s_query, {**s_changes, "sur_id": s.sur_id})
 
             return row
 

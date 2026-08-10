@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from modules.rates.rates_master.rate_types import TarrifNew, TariffPatch, NACNew, NACPatch, ContractNew, ContractPatch
-from modules.rates.rates.rate_types import VesselByVesselRateNew, VesselByVesselRatePatch, FAKRatesNew, FAKRatesPatch, SpecialRateNew, SpecialRatePatch
+from modules.rates.rate_types import TarrifNew, TariffPatch, NACNew, NACPatch, ContractNew, ContractPatch, VesselByVesselRateNew, VesselByVesselRatePatch, FAKRatesNew, FAKRatesPatch, SpecialRateNew, SpecialRatePatch
 from modules.rates.rates_master.api import IRatesMasterModule
 from modules.rates.rates.api import IRatesModule
 

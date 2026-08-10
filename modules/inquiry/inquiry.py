@@ -4,8 +4,9 @@ from psycopg.rows import dict_row
 from fastapi import HTTPException
 
 from data.dbconn import pool
-from modules.helpers import build_insert
+from utils.helpers import build_insert
 from modules.inquiry.api import IInquiryModule
+from modules.inquiry.activity_log.api import IAcitivityLog
 from modules.authen.api import IAuthnModule
 from modules.inquiry.inquiry_types import InquiryNewNew, InquiryOldNew, InquiryOldOld, InquiryPatch, CommodityPatch, ContainerPatch
 
@@ -15,8 +16,9 @@ from modules.inquiry.inquiry_types import InquiryNewNew, InquiryOldNew, InquiryO
 # case 3: existing client, existing contact person
 
 class InquiryModule(IInquiryModule):
-    def __init__(self, authentication: IAuthnModule):
+    def __init__(self, authentication: IAuthnModule, activity_log: IAcitivityLog):
         self.authen=authentication
+        self.activity_log=activity_log
 
     async def create_inquiry_case_1(self, payload: InquiryNewNew) -> dict:
         emp_id= self.authen.get_current_user().emp_id
@@ -63,8 +65,14 @@ class InquiryModule(IInquiryModule):
                         await cur.execute(build_insert("container", ctr_data, "cont_id"), ctr_data)
                         cont_ids.append((await cur.fetchone())["cont_id"])
 
+                    workflow_state={'inq_id':inq_id, 'flow_id':1, 'stage':'rate_check_in_progress'}
+
+                    await cur.execute(build_insert('worflow_stats',workflow_state, 'inq_id'), workflow_state)
+                    inq_id_log=(await cur.fetchone())["inq_id"]
+
             return {
                 "inq_id": inq_id,
+                "logged_inq_id": inq_id_log,
                 "cli_id": cli_id,
                 "cpid": cp_id,
                 "com_ids": com_ids,
@@ -129,8 +137,15 @@ class InquiryModule(IInquiryModule):
                         await cur.execute(build_insert("container", ctr_data, "cont_id"), ctr_data)
                         cont_ids.append((await cur.fetchone())["cont_id"])
 
+
+                    workflow_state={'inq_id':inq_id, 'flow_id':1, 'stage':'rate_check_in_progress'}
+                    
+                    await cur.execute(build_insert('worflow_stats',workflow_state, 'inq_id'), workflow_state)
+                    inq_id_log=(await cur.fetchone())["inq_id"]
+
             return {
                 "inq_id": inq_id,
+                "logged_inq_id": inq_id_log,
                 "cli_id": cli_id,
                 "cpid": cp_id,
                 "com_ids": com_ids,
@@ -191,8 +206,14 @@ class InquiryModule(IInquiryModule):
                         await cur.execute(build_insert("container", ctr_data, "cont_id"), ctr_data)
                         cont_ids.append((await cur.fetchone())["cont_id"])
 
+                    workflow_state={'inq_id':inq_id, 'flow_id':1, 'stage':'rate_check_in_progress'}
+                                        
+                    await cur.execute(build_insert('worflow_stats',workflow_state, 'inq_id'), workflow_state)
+                    inq_id_log=(await cur.fetchone())["inq_id"]
+
             return {
                 "inq_id": inq_id,
+                "logged_inq_id": inq_id_log,
                 "cli_id": cli_id,
                 "cpid": cp_id,
                 "com_ids": com_ids,
@@ -251,13 +272,11 @@ class InquiryModule(IInquiryModule):
         return row
 
     async def read_inquiry(self, inq_id):
-        emp_id=self.authen.get_current_user().emp_id
-
         QUERY="""
                 SELECT
                     i.cli_id,
                     i.inq_id,
-                    w.stage,
+                    w.stage AS workflow_stage,
                     cl.name,
                     cl.kyc_completed,
                     i.sbu,
@@ -268,7 +287,7 @@ class InquiryModule(IInquiryModule):
                     i.cargo_ready_date,
                     i.preferred_liners,
                     i.preferred_rate,
-                    
+
                     cm.com_id,
                     cm.name          AS commodity_name,
                     cm.com_type          AS commodity_type,
@@ -288,15 +307,15 @@ class InquiryModule(IInquiryModule):
                 JOIN commodity cm  ON cm.inq_id = i.inq_id
                 JOIN container cont ON cont.com_id = cm.com_id
                 JOIN workflow_stats w ON w.inq_id= i.inq_id
-                WHERE i.inq_id = %(inq_id)s AND i.emp_id=%(emp_id)s
+                WHERE i.inq_id = %(inq_id)s
               """
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
-                    await cur.execute("SELECT 1 FROM inquiry WHERE inq_id = %s AND emp_id = %s", (inq_id,emp_id))
+                    await cur.execute("SELECT 1 FROM inquiry WHERE inq_id = %s", (inq_id,))
                     if await cur.fetchone() is None:
                         raise HTTPException(404, f"Inquiry {inq_id} not found")
-                    await cur.execute(QUERY, {"inq_id": inq_id, "emp_id": emp_id})
+                    await cur.execute(QUERY, {"inq_id": inq_id})
                     return await cur.fetchall()
                 
         except HTTPException:
@@ -312,15 +331,15 @@ class InquiryModule(IInquiryModule):
             raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
 
     async def read_all_inquiry(self):
-        emp_id=self.authen.get_current_user().emp_id
-
         QUERY="""
                 SELECT
                     i.cli_id,
                     i.inq_id,
-                    w.stage,
+                    w.stage AS workflow_stage,
                     cl.name,
                     cl.kyc_completed,
+                    kr.kyc_stage,
+                    i.preferred_rate,
                     i.sbu,
                     i.origin,
                     i.incoterm,
@@ -328,9 +347,7 @@ class InquiryModule(IInquiryModule):
                     i.service_mode,
                     i.cargo_ready_date,
                     i.preferred_liners,
-                    i.preferred_rate,
-                    
-                    cm.com_id,
+                   cm.com_id,
                     cm.name          AS commodity_name,
                     cm.com_type          AS commodity_type,
                     cm.hs_code,
@@ -349,12 +366,12 @@ class InquiryModule(IInquiryModule):
                 JOIN commodity cm  ON cm.inq_id = i.inq_id
                 JOIN container cont ON cont.com_id = cm.com_id
                 JOIN workflow_stats w ON w.inq_id= i.inq_id
-                WHERE i.emp_id=%(emp_id)s;
+                JOIN kyc_request kr ON kr.cli_id = c.cli_id;
               """
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
-                    await cur.execute(QUERY, {"emp_id": emp_id})
+                    await cur.execute(QUERY)
                     return await cur.fetchall()
                 
         except HTTPException:

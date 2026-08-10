@@ -1,5 +1,5 @@
 from typing import Protocol
-from modules.rates.rates_master.rate_types import TarrifNew, TariffPatch, NACNew, NACPatch, ContractNew, ContractPatch
+from modules.rates.rate_types import TarrifNew, TariffPatch, NACNew, NACPatch, ContractNew, ContractPatch
 
 class IRatesMasterModule(Protocol):
     async def add_tariff_rate(self, payload: TarrifNew) -> dict: ...

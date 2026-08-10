@@ -4,9 +4,9 @@ from psycopg.rows import dict_row
 from fastapi import HTTPException
 
 from data.dbconn import pool
-from modules.helpers import build_insert
+from utils.helpers import build_insert
 from modules.inquiry.activity_log.api import IAcitivityLog
-from modules.inquiry.activity_log.activity_types import WorkflowStatusNew, WorkflowStatusPatch
+from modules.inquiry.activity_log.activity_types import WorkflowStage, WorkflowStatusNew, WorkflowStatusPatch
 
 
 class ActivityLogModule(IAcitivityLog):
@@ -16,6 +16,8 @@ class ActivityLogModule(IAcitivityLog):
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
+                    data['stage'] = WorkflowStage.rate_check_in_progress
+
                     await cur.execute(build_insert("workflow_stats", data), data)
                     row = await cur.fetchone()
             return row

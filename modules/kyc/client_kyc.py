@@ -4,9 +4,9 @@ from psycopg.rows import dict_row
 from fastapi import HTTPException
 
 from data.dbconn import pool
-from modules.helpers import build_insert
+from utils.helpers import build_insert
 from modules.kyc.api import IKYCModule
-from modules.kyc.client_kyc_types import KYCRequestNew, KYCRequestPatch, DocumentChecklistPatch
+from modules.kyc.client_kyc_types import KYCRequestNew, KYCRequestPatch, DocumentChecklistPatch, KYCStage
 from modules.client.api import IClientModule
 from modules.authen.api import IAuthnModule
 from modules.inquiry.inquiry_types import ContactNew
@@ -39,6 +39,12 @@ class KYCModule(IKYCModule):
                    if kyc_id:
                        await cur.execute(build_insert('document_checklist',{**docs, 'kyc_id':kyc_id}, 'doc_id'), {**docs, 'kyc_id':kyc_id})
                        doc_row = await cur.fetchone()
+
+                       if payload.docs.br_form:
+                           await cur.execute(
+                               "UPDATE kyc_request SET kyc_stage = %(stage)s WHERE kyc_id = %(kyc_id)s",
+                               {"stage": KYCStage.documents_submitted.value, "kyc_id": kyc_id}
+                           )
 
                        return doc_row
                     
@@ -108,6 +114,12 @@ class KYCModule(IKYCModule):
                 async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(query, {**changes, "doc_id": doc_id, "kyc_id": kyc_id})
                     row = await cur.fetchone()
+
+                    if "br_form" in changes and changes["br_form"]:
+                        await cur.execute(
+                            "UPDATE kyc_request SET kyc_stage = %(stage)s WHERE kyc_id = %(kyc_id)s",
+                            {"stage": KYCStage.documents_submitted.value, "kyc_id": kyc_id}
+                        )
         except (psycopg.errors.ForeignKeyViolation,
                 psycopg.errors.CheckViolation,
                 psycopg.errors.UndefinedColumn) as e:
@@ -121,5 +133,32 @@ class KYCModule(IKYCModule):
         if row is None:
             raise HTTPException(404, f"Document checklist {doc_id} not found for KYC request {kyc_id}")
         return row
-    
+
+    async def update_kyc_stage(self, cli_id: int, stage: KYCStage) -> dict:
+        try:
+            async with pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(
+                        """
+                        UPDATE kyc_request SET kyc_stage = %(stage)s
+                        WHERE cli_id = %(cli_id)s
+                        RETURNING *
+                        """,
+                        {"cli_id": cli_id, "stage": stage.value}
+                    )
+                    row = await cur.fetchone()
+        except (psycopg.errors.ForeignKeyViolation,
+                psycopg.errors.CheckViolation,
+                psycopg.errors.UndefinedColumn) as e:
+            raise HTTPException(422, {
+                "constraint": e.diag.constraint_name,
+                "message": e.diag.message_primary,
+            }) from e
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
+
+        if row is None:
+            raise HTTPException(404, f"KYC request for client {cli_id} not found")
+        return row
+
 

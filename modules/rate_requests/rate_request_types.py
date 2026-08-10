@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 
 class RateRequestNew(BaseModel):
+    inq_id: int
     emp_id_requested: int
     is_given: bool = False
     remark: str

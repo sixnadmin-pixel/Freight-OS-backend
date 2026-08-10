@@ -1,7 +1,14 @@
 from pydantic import BaseModel
 from datetime import date
+from enum import Enum
 
 from modules.client.client_types import ContactNew
+
+class KYCStage(str, Enum):
+     kyc_uninitiated          ='kyc_uninitiated'
+     kyc_pending              ='kyc_pending'
+     documents_submitted      ='documents_submitted'
+     kyc_completed            ='kyc_completed'
 
 class DocumentChecklist(BaseModel):
     cli_id: int
@@ -34,6 +41,7 @@ class KYCRequestNew(BaseModel):
     perishable_goods: bool = False
     contact_person: ContactNew | None = None
     docs: DocumentChecklist
+    kyc_stage: KYCStage = KYCStage.kyc_pending
 
 class DocumentChecklistPatch(BaseModel):
     cli_id: int | None = None
@@ -64,6 +72,5 @@ class  KYCRequestPatch(BaseModel):
     general_cargo: bool = False
     dangerous_goods: bool = False
     perishable_goods: bool = False
-
 
 
