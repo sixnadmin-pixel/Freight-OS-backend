@@ -1,0 +1,29 @@
+[33mcommit 17b4e83c88ae9aa1b88484dda56788c5d3565ba0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m
+Author: neuballcricket-tech <sixn.admin@gmail.com>
+Date:   Mon Aug 10 22:53:33 2026 +0530
+
+    restored helper function
+
+[33mcommit fd86eeae06017695b52a5e400e56ea2eb8dd99bf[m
+Author: neuballcricket-tech <sixn.admin@gmail.com>
+Date:   Mon Aug 10 15:11:18 2026 +0530
+
+    added quotation persistency + fixed workflow activity log
+
+[33mcommit 344e203176e78eb12c8253f9a9bdafaeb57adb66[m
+Author: neuballcricket-tech <sixn.admin@gmail.com>
+Date:   Wed Jul 22 19:52:17 2026 +0530
+
+    quotation beta
+
+[33mcommit 03a0f5179c45293496a2faff7095b11072fc0b5a[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: neuballcricket-tech <neuballcricket@gmail.com>
+Date:   Thu Jul 16 12:16:07 2026 +0530
+
+    created modular monolith for flow 1
+
+[33mcommit 5179d35c41acdf238aa6bca91bc1df0bea16dd0e[m
+Author: neuballcricket-tech <neuballcricket@gmail.com>
+Date:   Wed Jul 8 17:45:07 2026 +0530
+
+    inquiry creation and update

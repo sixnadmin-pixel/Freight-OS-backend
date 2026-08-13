@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import date
+from datetime import date
 from enum import Enum
 
 class QuotationStatus(str, Enum):
@@ -20,7 +20,7 @@ class QuotationNew(BaseModel):
     status: QuotationStatus = QuotationStatus.in_prep
     quote_date: date
     is_follow_up: bool = False
-    acceptence_deadline: date | None = None
+    acceptance_deadline: date | None = None
     sent_via: str
     options: list[QuotationOptions]
 

@@ -8,6 +8,7 @@ from utils.helpers import build_insert
 from modules.inquiry.api import IInquiryModule
 from modules.inquiry.activity_log.api import IAcitivityLog
 from modules.authen.api import IAuthnModule
+from modules.kyc.api import IKYCModule
 from modules.inquiry.inquiry_types import InquiryNewNew, InquiryOldNew, InquiryOldOld, InquiryPatch, CommodityPatch, ContainerPatch
 
 
@@ -16,9 +17,10 @@ from modules.inquiry.inquiry_types import InquiryNewNew, InquiryOldNew, InquiryO
 # case 3: existing client, existing contact person
 
 class InquiryModule(IInquiryModule):
-    def __init__(self, authentication: IAuthnModule, activity_log: IAcitivityLog):
+    def __init__(self, authentication: IAuthnModule, activity_log: IAcitivityLog, kyc: IKYCModule):
         self.authen=authentication
         self.activity_log=activity_log
+        self.kyc=kyc
 
     async def create_inquiry_case_1(self, payload: InquiryNewNew) -> dict:
         emp_id= self.authen.get_current_user().emp_id
@@ -67,8 +69,10 @@ class InquiryModule(IInquiryModule):
 
                     workflow_state={'inq_id':inq_id, 'flow_id':1, 'stage':'rate_check_in_progress'}
 
-                    await cur.execute(build_insert('worflow_stats',workflow_state, 'inq_id'), workflow_state)
+                    await cur.execute(build_insert('workflow_stats',workflow_state, 'inq_id'), workflow_state)
                     inq_id_log=(await cur.fetchone())["inq_id"]
+
+            await self.kyc.create_kyc_stage(cli_id)
 
             return {
                 "inq_id": inq_id,
@@ -140,7 +144,7 @@ class InquiryModule(IInquiryModule):
 
                     workflow_state={'inq_id':inq_id, 'flow_id':1, 'stage':'rate_check_in_progress'}
                     
-                    await cur.execute(build_insert('worflow_stats',workflow_state, 'inq_id'), workflow_state)
+                    await cur.execute(build_insert('workflow_stats',workflow_state, 'inq_id'), workflow_state)
                     inq_id_log=(await cur.fetchone())["inq_id"]
 
             return {
@@ -208,7 +212,7 @@ class InquiryModule(IInquiryModule):
 
                     workflow_state={'inq_id':inq_id, 'flow_id':1, 'stage':'rate_check_in_progress'}
                                         
-                    await cur.execute(build_insert('worflow_stats',workflow_state, 'inq_id'), workflow_state)
+                    await cur.execute(build_insert('workflow_stats',workflow_state, 'inq_id'), workflow_state)
                     inq_id_log=(await cur.fetchone())["inq_id"]
 
             return {
@@ -366,7 +370,7 @@ class InquiryModule(IInquiryModule):
                 JOIN commodity cm  ON cm.inq_id = i.inq_id
                 JOIN container cont ON cont.com_id = cm.com_id
                 JOIN workflow_stats w ON w.inq_id= i.inq_id
-                JOIN kyc_request kr ON kr.cli_id = c.cli_id;
+                JOIN kyc_request kr ON kr.cli_id = cl.cli_id;
               """
         try:
             async with pool.connection() as conn:

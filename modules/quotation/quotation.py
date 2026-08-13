@@ -61,6 +61,15 @@ class QuotationModule(IQuotationModule):
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(
+                        "SELECT status FROM quotation WHERE quote_id = %s", (quote_id,)
+                    )
+                    existing = await cur.fetchone()
+                    if existing is None:
+                        raise HTTPException(404, f"Quotation {quote_id} not found")
+                    if existing['status'] in (QuotationStatus.sent.value, QuotationStatus.accepted.value):
+                        raise HTTPException(409, f"Cannot modify quotation with status '{existing['status']}'")
+
                     if changes:
                         set_clause = sql.SQL(", ").join(
                             sql.SQL("{} = {}").format(sql.Identifier(col), sql.Placeholder(col))
@@ -72,13 +81,7 @@ class QuotationModule(IQuotationModule):
                         await cur.execute(query, {**changes, "quote_id": quote_id, "updated_by": updated_by})
                         row = await cur.fetchone()
                     else:
-                        await cur.execute(
-                            "SELECT * FROM quotation WHERE quote_id = %s", (quote_id,)
-                        )
-                        row = await cur.fetchone()
-
-                    if row is None:
-                        raise HTTPException(404, f"Quotation {quote_id} not found")
+                        row = existing
 
                     if options is not None:
                         await cur.execute(
@@ -143,6 +146,37 @@ class QuotationModule(IQuotationModule):
         )
 
         return row
+
+    async def read_all_quotations(self) -> list[dict]:
+        try:
+            async with pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute("""
+                        SELECT q.*, qo.option_id, qo.rate_id, qo.amt, qo.currency AS option_currency, qo.inq_id AS option_inq_id
+                        FROM quotation q
+                        LEFT JOIN quotation_option qo ON qo.quote_id = q.quote_id
+                    """)
+                    return await cur.fetchall()
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
+
+    async def read_quotation(self, quote_id: int) -> list[dict]:
+        try:
+            async with pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute("""
+                        SELECT q.*, qo.option_id, qo.rate_id, qo.amt, qo.currency AS option_currency, qo.inq_id AS option_inq_id
+                        FROM quotation q
+                        LEFT JOIN quotation_option qo ON qo.quote_id = q.quote_id
+                        WHERE q.quote_id = %(quote_id)s
+                    """, {"quote_id": quote_id})
+                    rows = await cur.fetchall()
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
+
+        if not rows:
+            raise HTTPException(404, f"Quotation {quote_id} not found")
+        return rows
 
     async def record_response(self, quote_id: int, payload: QuotationStatus) -> dict:
         if payload not in (QuotationStatus.accepted, QuotationStatus.rejected):

@@ -48,7 +48,7 @@ class InquiryFields(BaseModel):
     priority: str | None = None
     preferred_liners: str | None = None
     preferred_rate: float | None = None
-    service_mode: Literal["DOOR_TO_DOOR", "PORT_TO_PORT"] | None = None
+    service_mode: Literal["DOOR_TO_DOOR", "PORT_TO_PORT", "PORT_TO_DOOR","DOOR_TO_PORT"] | None = None
 
 
 class InquiryNewNew(BaseModel):

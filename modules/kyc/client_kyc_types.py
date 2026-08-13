@@ -4,11 +4,16 @@ from enum import Enum
 
 from modules.client.client_types import ContactNew
 
+class KYCStatus(str, Enum):
+    kyc_approved ='kyc_approved'
+    kyc_rejected = "kyc_rejected"
+
 class KYCStage(str, Enum):
      kyc_uninitiated          ='kyc_uninitiated'
      kyc_pending              ='kyc_pending'
      documents_submitted      ='documents_submitted'
      kyc_completed            ='kyc_completed'
+
 
 class DocumentChecklist(BaseModel):
     cli_id: int
@@ -19,16 +24,16 @@ class DocumentChecklist(BaseModel):
     form20: str | None = None
 
 class KYCRequestNew(BaseModel):
-    br_number: str
+    br_number: str | None = None
     parent_organization: str | None = None
     emp_id_sales: int | None = None
     emp_id_cs: int | None = None
-    document_submission_deadline: date
+    document_submission_deadline: date 
     cli_type: str
     currency: str
     website : str | None = None
     svat_no : str | None = None
-    tax_exemptions: str
+    tax_exemptions: str | None = None
     sea_imports: bool = False
     sea_exports: bool = False
     trade_lanes: bool = False
@@ -40,7 +45,7 @@ class KYCRequestNew(BaseModel):
     dangerous_goods: bool = False
     perishable_goods: bool = False
     contact_person: ContactNew | None = None
-    docs: DocumentChecklist
+    docs: DocumentChecklist 
     kyc_stage: KYCStage = KYCStage.kyc_pending
 
 class DocumentChecklistPatch(BaseModel):

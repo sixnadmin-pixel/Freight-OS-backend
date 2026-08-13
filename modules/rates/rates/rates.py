@@ -358,7 +358,7 @@ class RatesModule(IRatesModule):
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
-                    await cur.execute("SELECT * FROM fak_rates WHERE valid_to > NOW()")
+                    await cur.execute("SELECT f.*, s.sur_id, s.type AS surcharge_type, s.amt AS surcharge_amt, s.currency AS surcharge_currency FROM fak_rates f LEFT JOIN surcharge s ON s.rate_id = f.fak_id WHERE f.valid_to > NOW()")
                     return await cur.fetchall()
 
         except HTTPException:
@@ -370,7 +370,7 @@ class RatesModule(IRatesModule):
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
-                    await cur.execute("SELECT * FROM vessel_by_vessel_rate WHERE fcl_cutoff > NOW()")
+                    await cur.execute("SELECT v.*, s.sur_id, s.type AS surcharge_type, s.amt AS surcharge_amt, s.currency AS surcharge_currency FROM vessel_by_vessel_rate v LEFT JOIN surcharge s ON s.rate_id = v.srid WHERE v.fcl_cutoff > NOW()")
                     return await cur.fetchall()
 
         except HTTPException:
@@ -384,7 +384,7 @@ class RatesModule(IRatesModule):
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(
-                        "SELECT * FROM special_rate WHERE valid_to > NOW() AND emp_id = %(emp_id)s",
+                        "SELECT sp.*, s.sur_id, s.type AS surcharge_type, s.amt AS surcharge_amt, s.currency AS surcharge_currency FROM special_rate sp LEFT JOIN surcharge s ON s.rate_id = sp.sprid WHERE sp.valid_to > NOW() AND sp.emp_id = %(emp_id)s",
                         {"emp_id": emp_id},
                     )
                     return await cur.fetchall()

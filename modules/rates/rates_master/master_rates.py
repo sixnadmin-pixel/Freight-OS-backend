@@ -333,9 +333,11 @@ class RatesMasterModule(IRatesMasterModule):
     async def read_all_nac_rates(self) -> list[dict]:
         emp_id = self.authn.get_current_user().emp_id
         QUERY = """
-            SELECT * FROM nac
-            WHERE valid_to > NOW()
-              AND (emp_id = %(emp_id)s OR emp_id_sales = %(emp_id)s OR emp_id_cs = %(emp_id)s)
+            SELECT n.*, s.sur_id, s.type AS surcharge_type, s.amt AS surcharge_amt, s.currency AS surcharge_currency
+            FROM nac n
+            LEFT JOIN surcharge s ON s.rate_id = n.nac_id
+            WHERE n.valid_to > NOW()
+              AND (n.emp_id = %(emp_id)s OR n.emp_id_sales = %(emp_id)s OR n.emp_id_cs = %(emp_id)s)
             """
         try:
             async with pool.connection() as conn:
@@ -346,7 +348,7 @@ class RatesMasterModule(IRatesMasterModule):
             raise
         except psycopg.OperationalError as e:
             raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
-            
+
     async def read_client_nac_rates(self, cli_id):
         emp_id = self.authn.get_current_user().emp_id
         QUERY = """
@@ -408,9 +410,11 @@ class RatesMasterModule(IRatesMasterModule):
     async def read_all_contracted_rates(self) -> list[dict]:
         emp_id = self.authn.get_current_user().emp_id
         QUERY = """
-            SELECT * FROM contracted_rates
-            WHERE valid_to > NOW()
-              AND (emp_id = %(emp_id)s OR emp_id_sales = %(emp_id)s OR emp_id_cs = %(emp_id)s)
+            SELECT cr.*, s.sur_id, s.type AS surcharge_type, s.amt AS surcharge_amt, s.currency AS surcharge_currency
+            FROM contracted_rates cr
+            LEFT JOIN surcharge s ON s.rate_id = cr.crate_id
+            WHERE cr.valid_to > NOW()
+              AND (cr.emp_id = %(emp_id)s OR cr.emp_id_sales = %(emp_id)s OR cr.emp_id_cs = %(emp_id)s)
             """
         try:
             async with pool.connection() as conn:
@@ -444,7 +448,7 @@ class RatesMasterModule(IRatesMasterModule):
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
-                    await cur.execute("SELECT * FROM tariff_rates WHERE valid_to > NOW()")
+                    await cur.execute("SELECT t.*, s.sur_id, s.type AS surcharge_type, s.amt AS surcharge_amt, s.currency AS surcharge_currency FROM tariff_rates t LEFT JOIN surcharge s ON s.rate_id = t.tar_id WHERE t.valid_to > NOW()")
                     return await cur.fetchall()
         except HTTPException:
             raise

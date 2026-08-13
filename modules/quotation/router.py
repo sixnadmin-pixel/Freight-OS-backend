@@ -16,6 +16,19 @@ async def create_quotation(
 ):
     return await service.create_quotation(payload)
 
+@router.get("/")
+async def read_all_quotations(
+    service: IQuotationModule = Depends(get_quotation_module)
+):
+    return await service.read_all_quotations()
+
+@router.get("/{quote_id}")
+async def read_quotation(
+    quote_id: int,
+    service: IQuotationModule = Depends(get_quotation_module)
+):
+    return await service.read_quotation(quote_id)
+
 @router.patch("/{quote_id}")
 async def patch_quotation(
     quote_id: int,

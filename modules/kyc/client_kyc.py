@@ -134,6 +134,29 @@ class KYCModule(IKYCModule):
             raise HTTPException(404, f"Document checklist {doc_id} not found for KYC request {kyc_id}")
         return row
 
+    async def create_kyc_stage(self, cli_id: int) -> dict:
+        emp_id=self.authn.get_current_user().emp_id
+        data = {"cli_id": cli_id, "kyc_stage": KYCStage.kyc_uninitiated.value, "emp_id":emp_id}
+        try:
+            async with pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(build_insert("kyc_request", data, "kyc_id"), data)
+                    row = await cur.fetchone()
+        except (psycopg.errors.ForeignKeyViolation,
+                psycopg.errors.CheckViolation,
+                psycopg.errors.UniqueViolation,
+                psycopg.errors.UndefinedColumn) as e:
+            raise HTTPException(422, {
+                "constraint": e.diag.constraint_name,
+                "message": e.diag.message_primary,
+            }) from e
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
+
+        if row is None:
+            raise HTTPException(404, f"Client {cli_id} not found")
+        return row
+
     async def update_kyc_stage(self, cli_id: int, stage: KYCStage) -> dict:
         try:
             async with pool.connection() as conn:
@@ -161,4 +184,61 @@ class KYCModule(IKYCModule):
             raise HTTPException(404, f"KYC request for client {cli_id} not found")
         return row
 
+# returns all client data
+    async def read_all_pending_kyc(self):
+        QUERY="""
+            SELECT c.name, c.vat_no, c.tin, c.credit_limit, c.addr_street_ln, c.addr_city, c.addr_country
+            FROM inquiry i
+            JOIN client c ON i.cli_id=c.cli_id
+            JOIN kyc_request k ON k.cli_id = c.cli_id
+            WHERE k.kyc_stage='kyc_uninitiated';
+            """
 
+        try:
+            async with pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(QUERY,)
+                    return await cur.fetchall()
+                        
+        except HTTPException:
+            raise
+        except (psycopg.errors.ForeignKeyViolation,
+                        psycopg.errors.CheckViolation,
+                        psycopg.errors.UndefinedColumn) as e:
+            raise HTTPException(422, {
+                        "constraint": e.diag.constraint_name,
+                        "message": e.diag.message_primary,
+                    }) from e
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
+
+    async def read_all_kyc_requests(self):
+        QUERY="""
+        SELECT c.name, c.vat_no, c.tin, c.credit_limit, c.addr_street_ln, c.addr_city, c.addr_country, k.br_number, 
+        k.parent_organization, k.emp_id_sales, k.emp_id_cs, k.document_submission_deadline, k.currency, k.website, k.svat_no, k.tax_exemptions,
+        k.sea_imports, k.sea_exports, k.trade_lanes, k.forwarding, k.cross_trade, k.air_imports, k.air_exports, k.general_cargo, k.dangerous_goods, k.perishable_goods,
+        k.kyc_stage, d.br_form, d.vat_certificate, d.svat_certificate, d.tin_certificate, d.form20
+        FROM inquiry i
+        JOIN client c ON i.cli_id=c.cli_id
+        JOIN kyc_request k ON k.cli_id = c.cli_id
+        JOIN document_checklist d ON d.kyc_id = k.kyc_id
+        WHERE k.kyc_stage='documents_submitted';
+        """
+        try:
+            async with pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(QUERY,)
+                    return await cur.fetchall()
+                                
+        except HTTPException:
+            raise
+        except (psycopg.errors.ForeignKeyViolation,
+                                psycopg.errors.CheckViolation,
+                                psycopg.errors.UndefinedColumn) as e:
+            raise HTTPException(422, {
+                                "constraint": e.diag.constraint_name,
+                                "message": e.diag.message_primary,
+                            }) from e
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
+        

@@ -60,12 +60,12 @@ app.add_middleware(
 # services
 authn_service = AuthnModule()
 activity_log_service = ActivityLogModule()
-inquiry_service = InquiryModule(authn_service, activity_log_service)
 client_service = ClientModule(authn_service)
+kyc_service = KYCModule(client_service, authn_service)
+inquiry_service = InquiryModule(authn_service, activity_log_service, kyc_service)
 rates_master_service = RatesMasterModule(authn_service)
 rates_service = RatesModule(authn_service)
 rate_request_service = RateRequestModule(authn_service, activity_log_service)
-kyc_service = KYCModule(client_service, authn_service)
 liners_service = LinersModule(authn_service)
 quotation_service = QuotationModule(authn_service, activity_log_service)
 

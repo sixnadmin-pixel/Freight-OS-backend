@@ -34,7 +34,7 @@ This API implements the backend for **Flow 1 (Customer Inquiry to Quotation)** a
 | 1 | Customer sends inquiry | Inquiries | `POST /inquiries/inquiries-*` |
 | 2 | New or existing customer check | Clients | `POST /clients/clients`, `GET /clients/clients` |
 | 3 | Log inquiry + set priority | Inquiries | `POST /inquiries/inquiries-*`, `PATCH /inquiries/inquiries/{inq_id}` |
-| 4 | KYC / background check (new customers) | KYC | `POST /kyc/kyc-requests`, `PATCH .../stage` |
+| 4 | KYC / background check (new customers) | KYC | `GET /kyc/kyc-requests/pending`, `POST /kyc/kyc-requests`, `PATCH .../stage` |
 | 5 | Multi-step rate check | Rates | `GET /rates/tariff-rates`, `GET /rates/nac-rates`, etc. |
 | 6 | Escalate to procurement (optional) | Rate Requests | `POST /rate-requests` |
 | 7 | Send multiple quotation options | Quotations | `POST /quotations/`, `PATCH /quotations/{id}/send` |
@@ -79,20 +79,24 @@ The backend uses an internal `ActivityLogModule` (stored in the `workflow_stats`
 
 Modules that need to update the workflow receive the `ActivityLogModule` via dependency injection at startup. They call `self.activity_log.update_workflow_status(inq_id, WorkflowStatusPatch(stage=...))` internally after their primary database operation succeeds.
 
-### Transition 1: Inquiry Created (new client) → `kyc_pending`
+### Transition 1: Inquiry Created (new client) → `rate_check_in_progress` + KYC record initialized
 
 **Trigger:** `POST /inquiries/inquiries-new-new`
-**Set by:** `InquiryModule.create_inquiry_case_1()` — directly inserts a `workflow_stats` row.
-**Source:** `modules/inquiry/inquiry.py:68-70`
+**Set by:** `InquiryModule.create_inquiry_case_1()` — directly inserts a `workflow_stats` row and calls `self.kyc.create_kyc_stage(cli_id)`.
+**Source:** `modules/inquiry/inquiry.py:45`, `modules/inquiry/inquiry.py:68-70`
 
 ```python
-workflow_state = {'inq_id': inq_id, 'flow_id': 1, 'stage': 'kyc_pending'}
+# KYC uninitiated record is auto-created for the new client
+await self.kyc.create_kyc_stage(cli_id)
+
+# Workflow is set to rate_check_in_progress
+workflow_state = {'inq_id': inq_id, 'flow_id': 1, 'stage': 'rate_check_in_progress'}
 await cur.execute(build_insert('worflow_stats', workflow_state, 'inq_id'), workflow_state)
 ```
 
-**Why:** A new client has not been KYC-approved yet. The inquiry cannot proceed until Finance completes the KYC check.
+**Why:** When a new client inquiry is created, a `kyc_request` row with `kyc_stage = kyc_uninitiated` is automatically inserted so Finance can begin the KYC process. The inquiry workflow starts at `rate_check_in_progress` immediately — KYC tracking is now handled in parallel via the KYC module rather than gating the workflow.
 
-**Frontend note:** After calling this endpoint, the UI should show the inquiry in a "Pending KYC" state and direct the user to the KYC module. The frontend must manually call `PATCH /inquiries/workflow/{inq_id}` with `stage: "rate_check_in_progress"` after KYC is approved (or the backend KYC stage reaches `kyc_completed`), since no automatic bridge exists between the KYC module and the workflow today.
+**Frontend note:** After calling this endpoint, the inquiry workflow is already at `rate_check_in_progress`. In parallel, the Finance team should be notified to action the pending `kyc_uninitiated` record. Use `GET /kyc/...` or `PATCH /kyc/kyc-requests/clients/{cli_id}/stage` to track KYC progress independently.
 
 ---
 
@@ -238,18 +242,22 @@ await self.activity_log.update_workflow_status(
                                            └──────────┬──────────────────┘
                                                       │ can override
                                                       ▼ any transition
-┌─────────────┐    ┌──────────────────────┐    ┌─────────────────────────┐
-│ kyc_pending  │───▶│ rate_check_in_progress│───▶│escalated_to_procurement │
-└─────────────┘    └──────────────────────┘    └─────────────────────────┘
-  ▲ set by:          ▲ set by:                   ▲ set by:
-  │ POST /inquiries/ │ POST /inquiries/          │ POST /rate-requests
-  │ inquiries-new-new│ inquiries-old-new         │   (auto)
-  │   (auto)         │ inquiries-old-old         │
-  │                  │   (auto)                  │ DELETE .../options/{id}
-  │                  │                           │   (auto, if last option)
-  │                  │ PATCH /inquiries/          │
-  │                  │ workflow/{inq_id}          │
-  │                  │   (manual)                 │
+┌─────────────────────────┐    ┌─────────────────────────┐
+│  rate_check_in_progress  │───▶│escalated_to_procurement │
+└─────────────────────────┘    └─────────────────────────┘
+  ▲ set by:                      ▲ set by:
+  │ POST /inquiries/             │ POST /rate-requests
+  │ inquiries-new-new            │   (auto)
+  │   (auto, also creates        │
+  │    kyc_uninitiated record)   │ DELETE .../options/{id}
+  │ POST /inquiries/             │   (auto, if last option)
+  │ inquiries-old-new            │
+  │ inquiries-old-old            │
+  │   (auto)                     │
+  │                              │
+  │ PATCH /inquiries/            │
+  │ workflow/{inq_id}            │
+  │   (manual)                   │
   │                  │                           │
   │                  ▼                           ▼
   │           ┌──────────────┐          ┌──────────────┐
@@ -277,10 +285,9 @@ await self.activity_log.update_workflow_status(
 
 | From Stage | To Stage | Triggered By | Automatic? | Source File |
 |------------|----------|-------------|------------|-------------|
-| _(new)_ | `kyc_pending` | `POST /inquiries/inquiries-new-new` | yes | `inquiry.py:68` |
+| _(new)_ | `rate_check_in_progress` | `POST /inquiries/inquiries-new-new` (also auto-creates `kyc_uninitiated` record) | yes | `inquiry.py:45,68` |
 | _(new)_ | `rate_check_in_progress` | `POST /inquiries/inquiries-old-new` | yes | `inquiry.py:141` |
 | _(new)_ | `rate_check_in_progress` | `POST /inquiries/inquiries-old-old` | yes | `inquiry.py:209` |
-| `kyc_pending` | `rate_check_in_progress` | `PATCH /inquiries/workflow/{inq_id}` | **manual** | `activity_log.py:40` |
 | `rate_check_in_progress` | `escalated_to_procurement` | `POST /rate-requests` | yes | `rate_requests.py:35` |
 | `escalated_to_procurement` | `quotation_prep` | `POST /rate-requests/{id}/options` | yes | `rate_requests.py:100` |
 | `quotation_prep` | `escalated_to_procurement` | `DELETE /rate-requests/{id}/options/{id}` (last option) | yes | `rate_requests.py:146` |
@@ -292,7 +299,7 @@ await self.activity_log.update_workflow_status(
 
 1. **You do not need to call the workflow endpoint after most actions.** The transitions listed as "automatic" above happen server-side as part of the API call. After the response returns, the `workflow_stage` field on the inquiry is already updated.
 
-2. **The one gap you must handle manually** is the transition from `kyc_pending` to `rate_check_in_progress`. After KYC is approved (via `PATCH /kyc/kyc-requests/clients/{cli_id}/stage?stage=kyc_completed`), the frontend should call `PATCH /inquiries/workflow/{inq_id}` with `{ "stage": "rate_check_in_progress" }` to advance the inquiry.
+2. **KYC and the inquiry workflow are now tracked independently.** When a new-client inquiry is created (`POST /inquiries/inquiries-new-new`), both the workflow (`rate_check_in_progress`) and a KYC record (`kyc_uninitiated`) are set automatically. Finance advances the KYC stage via `PATCH /kyc/kyc-requests/clients/{cli_id}/stage` on their own timeline. No manual workflow patching is needed to unblock the inquiry.
 
 3. **To read the current stage**, use `GET /inquiries/inquiries/{inq_id}` — the response includes `workflow_stage` as a joined field from `workflow_stats`.
 
@@ -322,17 +329,42 @@ kyc_uninitiated → kyc_pending → documents_submitted → kyc_completed
 
 ### How KYC Stages Are Updated
 
-#### Transition: _(new)_ → `kyc_pending` (automatic)
+#### Transition: _(new)_ → `kyc_uninitiated` (automatic, on new-client inquiry creation)
+
+**Trigger:** `POST /inquiries/inquiries-new-new`
+**Set by:** `InquiryModule.create_inquiry_case_1()` calls `self.kyc.create_kyc_stage(cli_id)` immediately after inserting the client row.
+**Source:** `modules/inquiry/inquiry.py:45`, `modules/kyc/client_kyc.py:137`
+
+```python
+# Called inside create_inquiry_case_1 after client is created:
+await self.kyc.create_kyc_stage(cli_id)
+
+# Which inserts:
+data = {"cli_id": cli_id, "kyc_stage": KYCStage.kyc_uninitiated.value}
+await cur.execute(build_insert("kyc_request", data, "kyc_id"), data)
+```
+
+**Frontend note:** Automatic. A skeleton `kyc_request` row is created for every new client inquiry so Finance can see and act on it. Finance should then call `POST /kyc/kyc-requests` (with full KYC data) or `PATCH /kyc/kyc-requests/clients/{cli_id}/stage` to advance the stage.
+
+You can also initialize a KYC record manually for any client without creating an inquiry:
+
+**Trigger:** `POST /kyc/kyc-requests/clients/{cli_id}/stage`
+**Set by:** `KYCModule.create_kyc_stage()` — inserts a `kyc_request` row with `kyc_stage = kyc_uninitiated`.
+**Source:** `modules/kyc/client_kyc.py:137`
+
+---
+
+#### Transition: _(new)_ → `kyc_pending` (automatic, on full KYC request creation)
 
 **Trigger:** `POST /kyc/kyc-requests?cli_id={cli_id}`
-**Set by:** The `kyc_stage` field on `KYCRequestNew` defaults to `kyc_pending` when a KYC request is created.
+**Set by:** The `kyc_stage` field on `KYCRequestNew` defaults to `kyc_pending` when a full KYC request is created.
 **Source:** `modules/kyc/client_kyc_types.py:44`
 
 ```python
 kyc_stage: KYCStage = KYCStage.kyc_pending
 ```
 
-**Frontend note:** Automatic. Creating a KYC request sets the initial stage.
+**Frontend note:** Automatic. Creating a full KYC request sets the stage to `kyc_pending`.
 
 ---
 
@@ -383,23 +415,25 @@ await cur.execute(
 
 ---
 
-#### KYC → Inquiry Workflow Bridge (manual, frontend responsibility)
+#### KYC and Inquiry Workflow — Parallel Tracking
 
-The KYC module and the inquiry workflow module are **not connected automatically**. After Finance approves KYC:
+The KYC module and the inquiry workflow module are now **tracked in parallel**. When `POST /inquiries/inquiries-new-new` is called:
 
-1. Call `PATCH /kyc/kyc-requests/clients/{cli_id}/stage?stage=kyc_completed` to mark KYC as done.
-2. Then call `PATCH /inquiries/workflow/{inq_id}` with `{ "stage": "rate_check_in_progress" }` to advance the inquiry.
+- The inquiry workflow is set to `rate_check_in_progress` immediately.
+- A `kyc_request` row is automatically created with `kyc_stage = kyc_uninitiated`.
 
-The frontend must handle this two-step sequence. There is no server-side bridge between these modules.
+Finance advances the KYC stage on their own schedule using `PATCH /kyc/kyc-requests/clients/{cli_id}/stage`. The inquiry workflow no longer needs to be manually unblocked after KYC completion — both tracks run independently.
 
 ### KYC Stage Summary Table
 
 | From | To | Triggered By | Automatic? | Source File |
 |------|----|-------------|------------|-------------|
+| _(new)_ | `kyc_uninitiated` | `POST /inquiries/inquiries-new-new` (new client) | yes | `inquiry.py:45`, `client_kyc.py:137` |
+| _(new)_ | `kyc_uninitiated` | `POST /kyc/kyc-requests/clients/{cli_id}/stage` | **manual** | `client_kyc.py:137` |
 | _(new)_ | `kyc_pending` | `POST /kyc/kyc-requests` | yes (default) | `client_kyc_types.py:44` |
 | `kyc_pending` | `documents_submitted` | `POST /kyc/kyc-requests` (if `br_form` provided) | yes | `client_kyc.py:43` |
 | `kyc_pending` | `documents_submitted` | `PATCH .../documents/{doc_id}` (if `br_form` provided) | yes | `client_kyc.py:118` |
-| _any_ | _any_ | `PATCH /kyc/kyc-requests/clients/{cli_id}/stage?stage=...` | **manual** | `client_kyc.py:137` |
+| _any_ | _any_ | `PATCH /kyc/kyc-requests/clients/{cli_id}/stage?stage=...` | **manual** | `client_kyc.py:159` |
 
 ---
 
@@ -506,7 +540,7 @@ await self.activity_log.update_workflow_status(
 | `in_prep` | `sent` | `PATCH /quotations/{id}/send?status=sent` | inquiry → `quotation_sent` | `quotation.py:119` |
 | `sent` | `accepted` | `PATCH /quotations/{id}/response?status=accepted` | inquiry → `customer_response` | `quotation.py:147` |
 | `sent` | `rejected` | `PATCH /quotations/{id}/response?status=rejected` | inquiry → `customer_response` | `quotation.py:147` |
-| _any_ | _any_ | `PATCH /quotations/{id}` (body: `status`) | **none** | `quotation.py:53` |
+| _any_ | _any_ | `PATCH /quotations/{id}` (body: `status`) — blocked if `sent` or `accepted` (409) | **none** | `quotation.py:53` |
 
 ### How All Three State Machines Relate
 
@@ -793,6 +827,50 @@ Update or upload documents in the KYC checklist.
 
 ---
 
+### `POST /kyc/kyc-requests/clients/{cli_id}/stage`
+
+Initialize a KYC record for a client with stage set to `kyc_uninitiated`. This is called automatically when `POST /inquiries/inquiries-new-new` creates a new client, but can also be called manually.
+
+**Path Parameters**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `cli_id` | int | Client ID to initialize KYC for |
+
+**Response** `201` — Returns the created `kyc_request` row with `kyc_id`.
+
+---
+
+### `GET /kyc/kyc-requests/pending`
+
+List all clients with `kyc_stage = kyc_uninitiated`. Intended for the Finance team's queue of new clients awaiting KYC initiation.
+
+**Response** `200`
+
+```json
+[
+  {
+    "name": "Acme Exports",
+    "vat_no": "VAT123",
+    "tin": "TIN456",
+    "credit_limit": null,
+    "addr_street_ln": "12 Main St",
+    "addr_city": "Colombo",
+    "addr_country": "LK"
+  }
+]
+```
+
+---
+
+### `GET /kyc/kyc-requests/requests`
+
+List all KYC requests with their full details.
+
+**Response** `200` — Returns a list of KYC request records.
+
+---
+
 ### `PATCH /kyc/kyc-requests/clients/{cli_id}/stage`
 
 Update the KYC stage for a client.
@@ -821,7 +899,7 @@ Handle freight inquiries. Supports three creation scenarios depending on whether
 
 ### `POST /inquiries/inquiries-new-new`
 
-Create an inquiry for a brand-new client with a new contact person. Automatically sets workflow to `kyc_pending`.
+Create an inquiry for a brand-new client with a new contact person. Automatically sets workflow to `rate_check_in_progress` and creates a `kyc_request` record with `kyc_stage = kyc_uninitiated` for the new client.
 
 **Request Body**
 
@@ -1048,9 +1126,15 @@ Fetch a single inquiry with all related client, commodity, container, and workfl
 
 ### `GET /inquiries/inquiries`
 
-List all inquiries with joined data.
+List all inquiries with joined data. Includes `kyc_stage` from the joined `kyc_request` table (in addition to the fields returned by the single inquiry endpoint).
 
-**Response** `200` — Same row structure as the single inquiry endpoint.
+**Additional field in response:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `kyc_stage` | string | Current KYC stage for the client (`kyc_uninitiated`, `kyc_pending`, `documents_submitted`, `kyc_completed`) |
+
+**Response** `200` — Same row structure as the single inquiry endpoint, plus `kyc_stage`.
 
 ---
 
@@ -1188,7 +1272,18 @@ Standard tariff templates maintained in the rate database.
 
 #### `GET /rates/tariff-rates`
 
-List all tariff rates. **Response** `200`
+List all tariff rates. Response includes any associated surcharges via LEFT JOIN.
+
+**Additional surcharge fields in response:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sur_id` | int \| null | Surcharge ID |
+| `surcharge_type` | string \| null | Surcharge type |
+| `surcharge_amt` | float \| null | Surcharge amount |
+| `surcharge_currency` | string \| null | Surcharge currency |
+
+**Response** `200`
 
 #### `GET /rates/tariff-rates/{tar_id}`
 
@@ -1240,7 +1335,18 @@ Special negotiated rates for key accounts (~10 customers). Valid 6-12 months. Re
 
 #### `GET /rates/nac-rates`
 
-List all NAC rates. **Response** `200`
+List all NAC rates. Response includes any associated surcharges via LEFT JOIN.
+
+**Additional surcharge fields in response:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sur_id` | int \| null | Surcharge ID |
+| `surcharge_type` | string \| null | Surcharge type |
+| `surcharge_amt` | float \| null | Surcharge amount |
+| `surcharge_currency` | string \| null | Surcharge currency |
+
+**Response** `200`
 
 #### `GET /rates/nac-rates/{nac_id}`
 
@@ -1298,7 +1404,18 @@ Pre-agreed rates with liners, typically monthly or quarterly validity. Checked f
 
 #### `GET /rates/contracted-rates`
 
-List all contracted rates. **Response** `200`
+List all contracted rates. Response includes any associated surcharges via LEFT JOIN.
+
+**Additional surcharge fields in response:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sur_id` | int \| null | Surcharge ID |
+| `surcharge_type` | string \| null | Surcharge type |
+| `surcharge_amt` | float \| null | Surcharge amount |
+| `surcharge_currency` | string \| null | Surcharge currency |
+
+**Response** `200`
 
 #### `GET /rates/contracted-rates/{crate_id}`
 
@@ -1361,7 +1478,18 @@ Voyage-specific spot rates. Validity ranges from 24 hours to vessel departure. C
 
 #### `GET /rates/vessel-rates`
 
-List all vessel rates. **Response** `200`
+List all vessel rates. Response includes any associated surcharges via LEFT JOIN.
+
+**Additional surcharge fields in response:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sur_id` | int \| null | Surcharge ID |
+| `surcharge_type` | string \| null | Surcharge type |
+| `surcharge_amt` | float \| null | Surcharge amount |
+| `surcharge_currency` | string \| null | Surcharge currency |
+
+**Response** `200`
 
 #### `PATCH /rates/vessel-rates/{srid}`
 
@@ -1407,7 +1535,18 @@ Volume-based container load rates. Applicable for mixed cargo not covered by com
 
 #### `GET /rates/fak-rates`
 
-List all FAK rates. **Response** `200`
+List all FAK rates. Response includes any associated surcharges via LEFT JOIN.
+
+**Additional surcharge fields in response:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sur_id` | int \| null | Surcharge ID |
+| `surcharge_type` | string \| null | Surcharge type |
+| `surcharge_amt` | float \| null | Surcharge amount |
+| `surcharge_currency` | string \| null | Surcharge currency |
+
+**Response** `200`
 
 #### `PATCH /rates/fak-rates/{srid}`
 
@@ -1454,7 +1593,18 @@ Commodity-specific rates, linked to both an inquiry and a specific commodity. Us
 
 #### `GET /rates/special-rates`
 
-List all special rates. **Response** `200`
+List all special rates. Response includes any associated surcharges via LEFT JOIN.
+
+**Additional surcharge fields in response:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sur_id` | int \| null | Surcharge ID |
+| `surcharge_type` | string \| null | Surcharge type |
+| `surcharge_amt` | float \| null | Surcharge amount |
+| `surcharge_currency` | string \| null | Surcharge currency |
+
+**Response** `200`
 
 #### `PATCH /rates/special-rates/{sprid}`
 
@@ -1605,9 +1755,46 @@ Create a new quotation with rate options.
 
 ---
 
+### `GET /quotations/`
+
+List all quotations with their options joined.
+
+**Response** `200` — Returns a list of rows (one per quotation-option combination). Quotations without options appear once with null option fields.
+
+```json
+[
+  {
+    "quote_id": 1,
+    "inq_id": 1,
+    "status": "in_prep",
+    "quote_date": "2026-08-12",
+    "is_follow_up": false,
+    "acceptence_deadline": "2026-08-20",
+    "sent_via": "email",
+    "option_id": 1,
+    "rate_id": 5,
+    "amt": 1200.0,
+    "option_currency": "USD",
+    "option_inq_id": 1
+  }
+]
+```
+
+---
+
+### `GET /quotations/{quote_id}`
+
+Fetch a single quotation with its options joined.
+
+**Response** `200` — Same row structure as the list endpoint, filtered to the given `quote_id`.
+
+**Error** `404` — Quotation not found.
+
+---
+
 ### `PATCH /quotations/{quote_id}`
 
-Update quotation details and/or replace its options.
+Update quotation details and/or replace its options. **Quotations with status `sent` or `accepted` cannot be modified** — returns `409 Conflict`.
 
 **Request Body** — All fields optional:
 
@@ -1621,6 +1808,8 @@ Update quotation details and/or replace its options.
 | `options` | array | Replaces all existing options |
 
 **Response** `200` — Returns the updated quotation record.
+
+**Error** `409` — `"Cannot modify quotation with status 'sent'"` or `'accepted'`.
 
 ---
 
@@ -1672,7 +1861,7 @@ All endpoints use consistent error response formats.
 |------|---------|------|
 | `400` | Bad Request | No fields provided for update, or invalid status value |
 | `404` | Not Found | Resource does not exist |
-| `409` | Conflict | Unique constraint violation (duplicate record) |
+| `409` | Conflict | Unique constraint violation (duplicate record), or attempting to modify a finalized quotation (`sent`/`accepted`) |
 | `422` | Unprocessable Entity | Foreign key, check, not-null, or column constraint violation |
 | `503` | Service Unavailable | Database connection failure |
 

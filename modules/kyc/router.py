@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends
 
 from modules.kyc.client_kyc_types import KYCRequestNew, KYCRequestPatch, DocumentChecklistPatch, KYCStage
 from modules.kyc.api import IKYCModule
@@ -34,6 +34,13 @@ async def patch_document_checklist(
 ):
     return await service.patch_document_checklist(doc_id, kyc_id, payload)
 
+@router.post("/kyc-requests/clients/{cli_id}/stage", status_code=201)
+async def create_kyc_stage(
+    cli_id: int,
+    service: IKYCModule = Depends(get_kyc_module)
+):
+    return await service.create_kyc_stage(cli_id)
+
 @router.patch("/kyc-requests/clients/{cli_id}/stage")
 async def update_kyc_stage(
     cli_id: int,
@@ -41,3 +48,15 @@ async def update_kyc_stage(
     service: IKYCModule = Depends(get_kyc_module)
 ):
     return await service.update_kyc_stage(cli_id, stage)
+
+@router.get("/kyc-requests/pending")
+async def read_all_pending_kyc(
+    service: IKYCModule = Depends(get_kyc_module)
+):
+    return await service.read_all_pending_kyc()
+
+@router.get("/kyc-requests/requests")
+async def read_all_pending_kyc(
+    service: IKYCModule = Depends(get_kyc_module)
+):
+    return await service.read_all_kyc_requests()
