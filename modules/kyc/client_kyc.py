@@ -121,5 +121,58 @@ class KYCModule(IKYCModule):
         if row is None:
             raise HTTPException(404, f"Document checklist {doc_id} not found for KYC request {kyc_id}")
         return row
+<<<<<<< Updated upstream
     
+=======
+
+    async def create_kyc_stage(self, cli_id: int) -> dict:
+        data = {"cli_id": cli_id, "kyc_stage": KYCStage.kyc_uninitiated.value}
+        try:
+            async with pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(build_insert("kyc_request", data, "kyc_id"), data)
+                    row = await cur.fetchone()
+        except (psycopg.errors.ForeignKeyViolation,
+                psycopg.errors.CheckViolation,
+                psycopg.errors.UniqueViolation,
+                psycopg.errors.UndefinedColumn) as e:
+            raise HTTPException(422, {
+                "constraint": e.diag.constraint_name,
+                "message": e.diag.message_primary,
+            }) from e
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
+
+        if row is None:
+            raise HTTPException(404, f"Client {cli_id} not found")
+        return row
+
+    async def update_kyc_stage(self, cli_id: int, stage: KYCStage) -> dict:
+        try:
+            async with pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(
+                        """
+                        UPDATE kyc_request SET kyc_stage = %(stage)s
+                        WHERE cli_id = %(cli_id)s
+                        RETURNING *
+                        """,
+                        {"cli_id": cli_id, "stage": stage.value}
+                    )
+                    row = await cur.fetchone()
+        except (psycopg.errors.ForeignKeyViolation,
+                psycopg.errors.CheckViolation,
+                psycopg.errors.UndefinedColumn) as e:
+            raise HTTPException(422, {
+                "constraint": e.diag.constraint_name,
+                "message": e.diag.message_primary,
+            }) from e
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
+
+        if row is None:
+            raise HTTPException(404, f"KYC request for client {cli_id} not found")
+        return row
+
+>>>>>>> Stashed changes
 

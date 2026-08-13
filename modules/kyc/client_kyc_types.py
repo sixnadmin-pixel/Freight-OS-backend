@@ -3,6 +3,16 @@ from datetime import date
 
 from modules.client.client_types import ContactNew
 
+<<<<<<< Updated upstream
+=======
+class KYCStage(str, Enum):
+     kyc_uninitiated          ='kyc_uninitiated'
+     kyc_pending              ='kyc_pending'
+     documents_submitted      ='documents_submitted'
+     kyc_completed            ='kyc_completed'
+
+
+>>>>>>> Stashed changes
 class DocumentChecklist(BaseModel):
     cli_id: int
     br_form: str | None = None

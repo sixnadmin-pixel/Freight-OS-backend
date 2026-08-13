@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends
 
 from modules.kyc.client_kyc_types import KYCRequestNew, KYCRequestPatch, DocumentChecklistPatch
 from modules.kyc.api import IKYCModule
@@ -33,3 +33,21 @@ async def patch_document_checklist(
     service: IKYCModule = Depends(get_kyc_module)
 ):
     return await service.patch_document_checklist(doc_id, kyc_id, payload)
+<<<<<<< Updated upstream
+=======
+
+@router.post("/kyc-requests/clients/{cli_id}/stage", status_code=201)
+async def create_kyc_stage(
+    cli_id: int,
+    service: IKYCModule = Depends(get_kyc_module)
+):
+    return await service.create_kyc_stage(cli_id)
+
+@router.patch("/kyc-requests/clients/{cli_id}/stage")
+async def update_kyc_stage(
+    cli_id: int,
+    stage: KYCStage,
+    service: IKYCModule = Depends(get_kyc_module)
+):
+    return await service.update_kyc_stage(cli_id, stage)
+>>>>>>> Stashed changes
