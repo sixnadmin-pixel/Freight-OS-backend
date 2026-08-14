@@ -5,6 +5,7 @@ if sys.platform == "win32":
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from modules.authen.middleware import JWTAuthMiddleware
 from contextlib import asynccontextmanager
 
 from data.dbconn import pool
@@ -52,6 +53,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(JWTAuthMiddleware)
 
 # TODO research : should inquiry be allowed to create new client?
 # when clinnt module is down what happens to inquiry????

@@ -577,11 +577,85 @@ The arrows marked "auto-links" indicate that calling the quotation `/send` or `/
 
 ## 1. Authentication
 
-Session management for audit trails and permission tracking. Uses file-based user switching for development.
+Azure AD (Entra ID) SSO via OAuth2/OIDC. All protected endpoints require a `Bearer` token in the `Authorization` header.
+
+```
+Authorization: Bearer <access_token>
+```
+
+**Public endpoints** (no token required): `/auth/login`, `/auth/callback`, `/auth/refresh`, `/docs`, `/openapi.json`, `/`
+
+All other endpoints return `401 Unauthorized` without a valid token.
+
+### `GET /auth/login`
+
+Initiates the Azure AD SSO flow. Returns an authorization URL that the SPA should redirect the user to.
+
+**Response** `200`
+
+```json
+{
+  "auth_url": "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize?client_id=...&state=...&code_challenge=..."
+}
+```
+
+**Frontend note:** Redirect the user's browser to `auth_url`. After Azure AD authentication, the user is redirected back to `/auth/callback`.
+
+---
+
+### `GET /auth/callback?code={code}&state={state}`
+
+OAuth2 callback endpoint. Validates the OIDC state, exchanges the authorization code for Azure AD tokens, matches the user to an employee record in the database (by `azure_oid` or `mail_id`), issues backend JWTs, and redirects to the SPA.
+
+**Query Parameters**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `code` | string | Authorization code from Azure AD |
+| `state` | string | State parameter for CSRF validation |
+
+**Response** `302` — Redirects to `{FRONTEND_URL}/auth/callback?access_token=...&refresh_token=...`
+
+**Errors:**
+- `400` — Invalid or expired state parameter
+- `403` — No employee record found for the authenticated email
+- `502` — Failed to exchange authorization code or missing id_token
+
+**Frontend note:** Parse the `access_token` and `refresh_token` from the redirect URL query parameters. Store them (e.g., in memory or `sessionStorage`) and include the access token in all subsequent API requests via the `Authorization: Bearer` header.
+
+---
+
+### `POST /auth/refresh`
+
+Exchange a valid refresh token for a new token pair. Implements token rotation — the old refresh token is revoked and a new one is issued.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `refresh_token` | string | yes | The current refresh token |
+
+**Response** `200`
+
+```json
+{
+  "access_token": "eyJhbGci...",
+  "refresh_token": "eyJhbGci...",
+  "token_type": "bearer",
+  "expires_in": 900
+}
+```
+
+**Errors:**
+- `401` — Refresh token expired, invalid, wrong type, or revoked; or employee no longer exists
+
+**Frontend note:** Access tokens expire after 15 minutes. Call this endpoint before expiry (e.g., at the 12-minute mark) to silently refresh. Store the new token pair and discard the old one.
+
+---
 
 ### `GET /auth/me`
 
-Returns the current authenticated user.
+Returns the current authenticated user (derived from the JWT in the `Authorization` header).
 
 **Response** `200`
 
@@ -597,17 +671,25 @@ Returns the current authenticated user.
 
 ---
 
-### `POST /auth/switch-user/{emp_id}`
+### `POST /auth/logout`
 
-Switch the active session to a test user.
+Revokes the refresh token. The access token remains valid until it expires (max 15 minutes).
 
-**Path Parameters**
+**Request Body**
 
-| Param | Type | Description |
-|-------|------|-------------|
-| `emp_id` | int | Employee ID (5=procurement, 6=finance, 7=customer-service, 8=sales, 9=IT-AD) |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `refresh_token` | string | no | The refresh token to revoke |
 
-**Response** `200` — Returns the switched `Employee` object.
+**Response** `200`
+
+```json
+{
+  "message": "Logged out successfully"
+}
+```
+
+**Frontend note:** After logout, discard both tokens on the client side and redirect to the login page.
 
 ---
 
