@@ -16,7 +16,7 @@ def build_authorize_url(state: str, code_challenge: str, redirect_uri: str) -> s
         "client_id": config.CLIENT_ID,
         "response_type": "code",
         "redirect_uri": redirect_uri,
-        "scope": "FreightSSO",
+        "scope": f"api://{config.CLIENT_ID}/FreightSSO openid profile email",
         "response_mode": "query",
         "state": state,
         "code_challenge": code_challenge,
