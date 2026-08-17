@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from modules.quotation.quotation_type import QuotationNew, QuotationPatch, QuotationStatus
+from modules.quotation.quotation_type import QuotationNew, QuotationPatch, QuotationStatus, QuotationAcceptence
 from modules.quotation.api import IQuotationModule
 
 router = APIRouter(prefix='/quotations', tags=['Quotations'])
@@ -55,7 +55,7 @@ async def send_quotation(
 @router.patch("/{quote_id}/response")
 async def record_response(
     quote_id: int,
-    status: QuotationStatus,
+    payload: QuotationAcceptence,
     service: IQuotationModule = Depends(get_quotation_module)
 ):
-    return await service.record_response(quote_id, status)
+    return await service.record_response(quote_id, payload)
