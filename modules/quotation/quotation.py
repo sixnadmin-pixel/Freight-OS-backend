@@ -185,11 +185,34 @@ class QuotationModule(IQuotationModule):
         try:
             async with pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cur:
-                    await cur.execute(
-                        "UPDATE quotation SET status = %(status)s WHERE quote_id = %(quote_id)s RETURNING *",
-                        {"status": payload.value, "quote_id": quote_id}
-                    )
-                    row = await cur.fetchone()
+                    rate_id=payload.option
+                    if payload.value == QuotationStatus.accepted:
+                        await cur.execute(
+                            """
+                            SELECT EXISTS (
+                                SELECT 1 
+                                FROM quotation_option 
+                                WHERE  rate_id= %(rate_id)s AND quote_id=%(quote_id)s
+                            )
+                            """,
+                            {"rate_id": rate_id, "quote_id": quote_id}
+                        )
+
+                        exists = await cur.fetchone()["exists"]
+
+                        if exists:
+                            await cur.execute(
+                                """UPDATE quotation SET status = %(status)s WHERE quote_id = %(quote_id)s RETURNING *""",
+                                {"status": payload.value, "quote_id": quote_id}
+                            )
+                            row = await cur.fetchone()
+
+
+                        else:
+                            raise HTTPException(422, {
+                                    "constraint": "OPTION ID VALIDATION FAILED",
+                                    "message": "The option you selected does not exist",
+                                })
         except (psycopg.errors.ForeignKeyViolation,
                 psycopg.errors.CheckViolation) as e:
             raise HTTPException(422, {

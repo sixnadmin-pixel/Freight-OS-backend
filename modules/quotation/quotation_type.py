@@ -8,6 +8,10 @@ class QuotationStatus(str, Enum):
     accepted='accepted'
     rejected = 'rejected'
 
+class QuotationAcceptence(BaseModel):
+    status : QuotationStatus.accepted
+    option : int
+
 class QuotationOptions(BaseModel):
     inq_id: int
     rate_id: int 

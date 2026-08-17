@@ -1919,17 +1919,20 @@ Mark a quotation as sent to the customer. Transitions the inquiry workflow to `q
 
 ### `PATCH /quotations/{quote_id}/response`
 
-Record the customer's response to a quotation. Transitions the inquiry workflow to `customer_response`. **This is the final step covered by this API (Flow 2, Step 2).**
+Record the customer's response to a quotation. When accepting, validates that the selected option exists for this quotation. Transitions the inquiry workflow to `customer_response`. **This is the final step covered by this API (Flow 2, Step 2).**
 
-**Query Parameters**
+**Request Body**
 
-| Param | Type | Values |
-|-------|------|--------|
-| `status` | QuotationStatus | `accepted` or `rejected` |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `status` | string | yes | Must be `accepted` |
+| `option` | int | yes | The `rate_id` of the accepted quotation option |
 
 **Response** `200` — Returns the updated quotation record.
 
-**Validation:** Returns `400` if the status is anything other than `accepted` or `rejected`.
+**Errors:**
+- `400` — Status is not `accepted` or `rejected`
+- `422` — The selected option does not exist for this quotation
 
 ---
 
