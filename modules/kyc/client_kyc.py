@@ -187,7 +187,7 @@ class KYCModule(IKYCModule):
 # returns all client data
     async def read_all_pending_kyc(self):
         QUERY="""
-            SELECT c.name, c.vat_no, c.tin, c.credit_limit, c.addr_street_ln, c.addr_city, c.addr_country
+            SELECT c.cli_id, c.name, c.vat_no, c.tin, c.credit_limit, c.addr_street_ln, c.addr_city, c.addr_country
             FROM inquiry i
             JOIN client c ON i.cli_id=c.cli_id
             JOIN kyc_request k ON k.cli_id = c.cli_id
@@ -214,7 +214,7 @@ class KYCModule(IKYCModule):
 
     async def read_all_kyc_requests(self):
         QUERY="""
-        SELECT c.name, c.vat_no, c.tin, c.credit_limit, c.addr_street_ln, c.addr_city, c.addr_country, k.br_number, 
+        SELECT c.cli_id, c.name, c.vat_no, c.tin, c.credit_limit, c.addr_street_ln, c.addr_city, c.addr_country, k.br_number, 
         k.parent_organization, k.emp_id_sales, k.emp_id_cs, k.document_submission_deadline, k.currency, k.website, k.svat_no, k.tax_exemptions,
         k.sea_imports, k.sea_exports, k.trade_lanes, k.forwarding, k.cross_trade, k.air_imports, k.air_exports, k.general_cargo, k.dangerous_goods, k.perishable_goods,
         k.kyc_stage, d.br_form, d.vat_certificate, d.svat_certificate, d.tin_certificate, d.form20
