@@ -12,3 +12,7 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8002")
 
 AUTH_ENDPOINT = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/authorize"
 TOKEN_ENDPOINT = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
+
+
+OPENAI_API_KEY = os.getenv("OPENAI_API")        
+OPENAI_MODEL   = os.getenv("OPEN_AI_MODEL", "gpt-5.4-mini")

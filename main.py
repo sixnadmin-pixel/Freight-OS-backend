@@ -47,13 +47,14 @@ async def lifespan(app:FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+app.add_middleware(JWTAuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(JWTAuthMiddleware)
+
 
 # TODO research : should inquiry be allowed to create new client?
 # when clinnt module is down what happens to inquiry????

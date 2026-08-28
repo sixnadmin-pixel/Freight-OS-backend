@@ -122,3 +122,39 @@ class InquiryView(BaseModel):
     commodity: CommodityNew
     container: ContainerNew
 
+
+
+# RFQ BULK TYPES
+# One RFQ = one customer + many origin-destination routes.
+# Each line reuses the existing per-inquiry building blocks.
+
+class RfqLine(BaseModel):
+    inquiry: InquiryFields                  # carries origin
+    commodities: list[CommodityNew] = []
+    containers: list[ContainerNew] = []     # carries destination
+
+
+class RfqBulkNew(BaseModel):
+    cli_id: int                             # RFQs are existing customers only
+    cp_id: int | None = None                # existing contact, if known
+    contact: ContactNew | None = None       # else create ONE, reused by every line
+    lines: list[RfqLine]
+
+
+
+class RfqPreviewRow(BaseModel):
+    row: int
+    origin: str = ""             # as written in the sheet
+    origin_code: str = ""        # resolved UN/LOCODE, "" if unresolved
+    destination: str = ""
+    destination_code: str = ""
+    country: str = ""
+    known_port: bool = False     # True when BOTH ends resolved
+
+
+class RfqPreviewResult(BaseModel):
+    destination: str | None
+    rows: list[RfqPreviewRow]
+    skipped: list[dict]
+    unknown_count: int
+

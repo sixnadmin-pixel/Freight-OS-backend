@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, UploadFile, File
 
-from modules.inquiry.inquiry_types import InquiryNewNew, InquiryOldNew, InquiryOldOld, InquiryPatch, CommodityPatch, ContainerPatch
+from modules.inquiry.inquiry_types import InquiryNewNew, InquiryOldNew, InquiryOldOld, InquiryPatch, CommodityPatch, ContainerPatch, RfqBulkNew, RfqPreviewResult
 from modules.inquiry.api import IInquiryModule
 from modules.inquiry.activity_log.activity_types import WorkflowStatusNew, WorkflowStatusPatch
 from modules.inquiry.activity_log.api import IAcitivityLog
@@ -34,6 +34,23 @@ async def create_inquiry_old_old(
     service: IInquiryModule = Depends(get_inquiry_module)
 ):
     return await service.create_inquiry_case_3(payload)
+
+
+@router.post("/rfq", status_code=201)
+async def create_rfq(
+    payload: RfqBulkNew,
+    service: IInquiryModule = Depends(get_inquiry_module)
+):
+    return await service.create_rfq_bulk(payload)
+
+
+@router.post("/rfq/preview")
+async def preview_rfq(
+    file: UploadFile = File(...),
+    service: IInquiryModule = Depends(get_inquiry_module)
+) -> RfqPreviewResult:
+    return await service.preview_rfq_excel(await file.read())
+
 
 @router.patch("/inquiries/{inq_id}")
 async def patch_inquiry(
