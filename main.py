@@ -32,6 +32,9 @@ from modules.liners.liners import LinersModule
 from modules.quotation.router import router as quotation_router, get_quotation_module
 from modules.quotation.quotation import QuotationModule
 
+from modules.booking.router import router as booking_router, get_booking_module, get_authn_module as get_booking_authn_module
+from modules.booking.booking import BookingModule
+
 from modules.authen.router import router as authn_router, get_authn_module
 from modules.authen.authn import AuthnModule
 
@@ -70,6 +73,7 @@ rates_service = RatesModule(authn_service)
 rate_request_service = RateRequestModule(authn_service, activity_log_service)
 liners_service = LinersModule(authn_service)
 quotation_service = QuotationModule(authn_service, activity_log_service)
+booking_service = BookingModule(authn_service, activity_log_service)
 
 app.dependency_overrides[get_inquiry_module] = lambda: inquiry_service
 app.dependency_overrides[get_client_module] = lambda: client_service
@@ -81,6 +85,8 @@ app.dependency_overrides[get_liners_module] = lambda: liners_service
 app.dependency_overrides[get_activity_log_module] = lambda: activity_log_service
 app.dependency_overrides[get_quotation_module] = lambda: quotation_service
 app.dependency_overrides[get_authn_module] = lambda: authn_service
+app.dependency_overrides[get_booking_module] = lambda: booking_service
+app.dependency_overrides[get_booking_authn_module] = lambda: authn_service
 
 
 # routers
@@ -92,6 +98,7 @@ app.include_router(kyc_router)
 app.include_router(liners_router)
 app.include_router(quotation_router)
 app.include_router(authn_router)
+app.include_router(booking_router)
 
 @app.get("/")
 def read_root():

@@ -232,3 +232,6 @@ class QuotationModule(IQuotationModule):
 
         return row
 
+    async def fetch_all_accepted_quotations(self):
+        QUERY= ""
+        pass

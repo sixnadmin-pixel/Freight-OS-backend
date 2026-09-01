@@ -370,12 +370,48 @@ CREATE TABLE "vessel_by_vessel_rate" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_by" bigint
 );
+CREATE TABLE "booking_request" (
+	"booking_id" bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "booking_request_booking_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1),
+	"inq_id" bigint NOT NULL,
+	"cli_id" bigint NOT NULL,
+	"emp_id_cs" bigint,
+	"lin_id" bigint NOT NULL,
+	"origin" varchar(10) NOT NULL,
+	"destination" varchar(10) NOT NULL,
+	"vessel" varchar(100) NOT NULL,
+	"vessel_etd" timestamp with time zone NOT NULL,
+	"voyage" varchar(40) NOT NULL,
+	"cargo_ready_date" date NOT NULL,
+	"delivery_type" varchar(30) NOT NULL,
+	"agreed_rate" numeric(12, 2) NOT NULL,
+	"rate_remark" text,
+	"delivery_term" varchar(30) NOT NULL,
+	"commodity" bigint NOT NULL,
+	"hs_code" varchar(15) NOT NULL,
+	"contract_no" varchar(50),
+	"ra_number" varchar(50),
+	"specific_routing" varchar(100),
+	"bl_type" varchar(30) NOT NULL,
+	"booking_type" varchar(30),
+	"reefer_temp" varchar(20),
+	"delivery_agent" varchar(100),
+	"status" varchar(30) NOT NULL DEFAULT 'request_initiated',
+	"notes" text NOT NULL,
+	"reviewed_by" bigint,
+	"updated_by" bigint,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "booking_request_status_check" CHECK (((status)::text = ANY ((ARRAY['request_initiated'::character varying, 'request_reviewed'::character varying, 'request_booking_success'::character varying, 'request_booking_failure'::character varying, 'release_order_received'::character varying])::text[])))
+);
 CREATE TABLE "zip_code" (
 	"zip" varchar(15) PRIMARY KEY,
 	"region_state" varchar(80),
 	"tr_ln_id" bigint,
 	"port_id" varchar(10)
 );
+CREATE UNIQUE INDEX "booking_request_pkey" ON "booking_request" ("booking_id");
+CREATE INDEX "idx_booking_request_inquiry" ON "booking_request" ("inq_id");
+CREATE INDEX "idx_booking_request_client" ON "booking_request" ("cli_id");
 CREATE UNIQUE INDEX "client_pkey" ON "client" ("cli_id");
 CREATE UNIQUE INDEX "commodity_pkey" ON "commodity" ("com_id");
 CREATE INDEX "idx_commodity_inquiry" ON "commodity" ("inq_id");
@@ -424,6 +460,15 @@ CREATE UNIQUE INDEX "vessel_by_vessel_rate_pkey" ON "vessel_by_vessel_rate" ("sr
 CREATE INDEX "idx_zip_code_port" ON "zip_code" ("port_id");
 CREATE INDEX "idx_zip_code_tradelane" ON "zip_code" ("tr_ln_id");
 CREATE UNIQUE INDEX "zip_code_pkey" ON "zip_code" ("zip");
+ALTER TABLE "booking_request" ADD CONSTRAINT "booking_request_inq_id_fkey" FOREIGN KEY ("inq_id") REFERENCES "inquiry"("inq_id") ON DELETE CASCADE;
+ALTER TABLE "booking_request" ADD CONSTRAINT "booking_request_cli_id_fkey" FOREIGN KEY ("cli_id") REFERENCES "client"("cli_id");
+ALTER TABLE "booking_request" ADD CONSTRAINT "booking_request_lin_id_fkey" FOREIGN KEY ("lin_id") REFERENCES "liner"("lin_id");
+ALTER TABLE "booking_request" ADD CONSTRAINT "booking_request_origin_fkey" FOREIGN KEY ("origin") REFERENCES "port"("unlocode");
+ALTER TABLE "booking_request" ADD CONSTRAINT "booking_request_destination_fkey" FOREIGN KEY ("destination") REFERENCES "port"("unlocode");
+ALTER TABLE "booking_request" ADD CONSTRAINT "booking_request_emp_id_cs_fkey" FOREIGN KEY ("emp_id_cs") REFERENCES "employee"("emp_id");
+ALTER TABLE "booking_request" ADD CONSTRAINT "booking_request_commodity_fkey" FOREIGN KEY ("commodity") REFERENCES "commodity"("com_id");
+ALTER TABLE "booking_request" ADD CONSTRAINT "booking_request_reviewed_by_fkey" FOREIGN KEY ("reviewed_by") REFERENCES "employee"("emp_id");
+ALTER TABLE "booking_request" ADD CONSTRAINT "booking_request_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "employee"("emp_id");
 ALTER TABLE "client" ADD CONSTRAINT "client_assigned_to_fkey" FOREIGN KEY ("assigned_to") REFERENCES "employee"("emp_id");
 ALTER TABLE "client" ADD CONSTRAINT "client_emp_id_fkey" FOREIGN KEY ("emp_id") REFERENCES "employee"("emp_id");
 ALTER TABLE "client" ADD CONSTRAINT "client_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "employee"("emp_id");
