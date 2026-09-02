@@ -9,7 +9,7 @@ from modules.booking.api import IBookingModule
 from modules.authen.api import IAuthnModule
 from modules.inquiry.activity_log.api import IAcitivityLog
 from modules.inquiry.activity_log.activity_types import WorkflowStage, WorkflowStatusPatch
-from modules.booking.booking_types import bookingRequestNew, bookingRequestPatch, bookingRequestReview
+from modules.booking.booking_types import bookingRequestNew, bookingRequestPatch, bookingRequestReview, bookingRequestStatus
 
 
 class BookingModule(IBookingModule):
@@ -90,11 +90,10 @@ class BookingModule(IBookingModule):
             raise HTTPException(404, f"Booking request not found for {booking_id}")
         return row
 
-    async def review_booking_req(self, booking_id: int, reviewed_by: int, payload: bookingRequestReview) -> dict:
+    async def review_booking_req(self, booking_id: int, payload: bookingRequestReview) -> dict:
         changes = payload.model_dump(exclude_unset=True)
 
-        changes['reviewed_by'] = reviewed_by
-
+        reviewed_by= self.authen.get_current_user().emp_id
 
         if not changes:
             raise HTTPException(400, 'No fields provided for update...')
@@ -129,3 +128,41 @@ class BookingModule(IBookingModule):
             raise HTTPException(404, f"Booking request not found for booking_id {booking_id}")
         return row
 
+    async def confirm_booking_success(self, booking_id: int) -> dict:
+        query = sql.SQL(
+            "UPDATE booking_request SET status = {} WHERE booking_id = {} RETURNING *"
+        ).format(
+            sql.Placeholder("status"),
+            sql.Placeholder("booking_id"),
+        )
+
+        try:
+            async with pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(query, {
+                        "status": bookingRequestStatus.request_booking_success.value,
+                        "booking_id": booking_id,
+                    })
+                    row = await cur.fetchone()
+        except (psycopg.errors.ForeignKeyViolation,
+                psycopg.errors.CheckViolation,
+                psycopg.errors.NotNullViolation,
+                psycopg.errors.UniqueViolation,
+                psycopg.errors.StringDataRightTruncation) as e:
+            raise HTTPException(422, {
+                "error": "constraint_violation",
+                "constraint": e.diag.constraint_name,
+                "message": e.diag.message_primary,
+            }) from e
+        except psycopg.OperationalError as e:
+            raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
+
+        if row is None:
+            raise HTTPException(404, f"Booking request not found for booking_id {booking_id}")
+
+        await self.activity_log.update_workflow_status(
+            row['inq_id'],
+            WorkflowStatusPatch(stage=WorkflowStage.completed)
+        )
+
+        return row

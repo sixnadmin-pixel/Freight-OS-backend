@@ -2,6 +2,8 @@ from enum import Enum
 from pydantic import BaseModel
 
 
+# TODO: add stages to find inq. ready to be tracked -> portwatch
+
 class WorkflowStage(str, Enum):
     kyc_pending              = 'kyc_pending'
     rate_check_in_progress   = 'rate_check_in_progress'
@@ -10,6 +12,8 @@ class WorkflowStage(str, Enum):
     quotation_sent           = 'quotation_sent'
     customer_response        = 'customer_response'
     booking_request          = 'booking_request'
+    booking_confirmed        = 'booking_confirmed' 
+    bl_drafting              = 'bl_drafted'
     completed                = 'completed'
 
 

@@ -87,3 +87,12 @@ class bookingRequestReview(BaseModel):
         delivery_agent: str | None = None
         status : bookingRequestStatus = bookingRequestStatus.request_reviewed
         notes : str | None = None
+
+class bookingSucess(BaseModel):
+        booking_id: int
+        status: bookingRequestStatus = bookingRequestStatus.request_booking_success
+
+class cutoffSchedules(BaseModel):
+        bl_cutoff : date
+        vgm_weight : float
+           
