@@ -92,7 +92,7 @@ class bookingSucess(BaseModel):
         booking_id: int
         status: bookingRequestStatus = bookingRequestStatus.request_booking_success
 
-class cutoffSchedules(BaseModel):
-        bl_cutoff : date
-        vgm_weight : float
+# class cutoffSchedules(BaseModel):
+#         bl_cutoff : date
+#         vgm_weight : float
            

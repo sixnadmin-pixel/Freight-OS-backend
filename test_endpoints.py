@@ -466,6 +466,79 @@ r = requests.patch(f"{BASE}/kyc/kyc-requests/{kyc_id}/documents/{doc_id}", heade
 })
 pr(f"PATCH /kyc/kyc-requests/{kyc_id}/documents/{doc_id}", r)
 
+# -- booking requests ----------------------------------------------------------
+
+r_booking = requests.post(f"{BASE}/booking-requests", headers=HEADERS, json={
+    "inq_id": inq_id,
+    "cli_id": cli_id,
+    "lin_id": lin_id,
+    "origin": "LKCMB",
+    "destination": "SGSIN",
+    "vessel": "MSC OSCAR",
+    "vessel_etd": "2025-03-15T00:00:00",
+    "voyage": "VOY-001W",
+    "cargo_ready_date": "2025-03-01",
+    "delivery_type": "CY/CY",
+    "agreed_rate": 1250.00,
+    "delivery_term": "FOB",
+    "commodity": com_id,
+    "hs_code": "8471.30",
+    "bl_type": "Original",
+    "notes": "Test booking request"
+})
+pr("POST /booking-requests", r_booking)
+booking_id = safe_id(r_booking, "booking_id")
+
+r = requests.patch(f"{BASE}/booking-requests", headers=HEADERS, json={
+    "inq_id": inq_id,
+    "cli_id": cli_id,
+    "bl_type": "Original",
+    "vessel": "MSC OSCAR II",
+    "notes": "Updated vessel name"
+})
+pr("PATCH /booking-requests", r)
+
+r = requests.patch(f"{BASE}/booking-requests/review", headers=HEADERS, json={
+    "inq_id": inq_id,
+    "cli_id": cli_id,
+    "bl_type": "Original",
+    "status": "request_reviewed",
+    "notes": "Reviewed and approved"
+})
+pr("PATCH /booking-requests/review", r)
+
+# -- release orders ------------------------------------------------------------
+
+r_ro = requests.post(f"{BASE}/booking-requests/release-orders", headers=HEADERS, json={
+    "inq_id": inq_id,
+    "booking_id": booking_id,
+    "cli_id": cli_id,
+    "liner_ref": "MSC-RO-001",
+    "empty_pickup": "2025-03-05",
+    "validity_exp": "2025-03-20",
+    "depot_name": "CMA CGM Depot",
+    "depot_addr": "123 Port Road, Colombo",
+    "vessel_cutoff": "2025-03-12",
+    "etd": "2025-03-15",
+    "eta_destination": "2025-03-29",
+    "next_port": "SGSIN",
+    "remark": "Handle with care",
+    "cargo_weight": 18500.00,
+    "cargo_desc": "Consumer electronics"
+})
+pr("POST /booking-requests/release-orders", r_ro)
+ro_id = safe_id(r_ro, "ro_id")
+
+r = requests.patch(f"{BASE}/booking-requests/release-orders/{ro_id}", headers=HEADERS, json={
+    "depot_name": "MSC Depot Updated",
+    "cargo_weight": 19000.00,
+    "remark": "Updated remark"
+})
+pr(f"PATCH /booking-requests/release-orders/{ro_id}", r)
+
+r = requests.get(f"{BASE}/booking-requests/release-orders", headers=HEADERS)
+pr("GET /booking-requests/release-orders", r)
+
 # -- logout test ---------------------------------------------------------------
 
 pr("POST /auth/logout",

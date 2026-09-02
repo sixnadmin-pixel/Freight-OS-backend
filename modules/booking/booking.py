@@ -1,7 +1,7 @@
 import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
-from fastapi import HTTPException
+from fastapi import File, HTTPException, UploadFile
 
 from data.dbconn import pool
 from utils.helpers import build_insert
@@ -166,3 +166,40 @@ class BookingModule(IBookingModule):
         )
 
         return row
+
+    # async def record_cutoffs(self, booking_id: int, payload: cutoffSchedules, file: UploadFile = File(...)) -> dict:
+    #     data = payload.model_dump(exclude_unset=True)
+    #     data['booking_id'] = booking_id
+
+    #     set_clause = sql.SQL(", ").join(
+    #         sql.SQL("{} = {}").format(sql.Identifier(col), sql.Placeholder(col))
+    #         for col in data if col != 'booking_id'
+    #     )
+    #     query = sql.SQL(
+    #         "UPDATE cutoffs SET {} WHERE booking_id = {} RETURNING *"
+    #     ).format(set_clause, sql.Placeholder("booking_id"))
+
+    #     try:
+    #         async with pool.connection() as conn:
+    #             async with conn.cursor(row_factory=dict_row) as cur:
+    #                 await cur.execute(query, data)
+    #                 row = await cur.fetchone()
+    #     except (psycopg.errors.ForeignKeyViolation,
+    #                     psycopg.errors.CheckViolation,
+    #                     psycopg.errors.NotNullViolation,
+    #                     psycopg.errors.UniqueViolation,
+    #                     psycopg.errors.StringDataRightTruncation) as e:
+    #         raise HTTPException(422, {
+    #                     "error": "constraint_violation",
+    #                     "constraint": e.diag.constraint_name,
+    #                     "message": e.diag.message_primary,
+    #                 }) from e
+    #     except psycopg.OperationalError as e:
+    #         raise HTTPException(503, {"error": "database_unavailable", "message": str(e)}) from e
+        
+    #     if row is None:
+    #         raise HTTPException(404, f"Booking request not found for booking_id {booking_id}")
+    #     return row
+        
+
+

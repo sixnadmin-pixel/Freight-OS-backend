@@ -32,8 +32,9 @@ from modules.liners.liners import LinersModule
 from modules.quotation.router import router as quotation_router, get_quotation_module
 from modules.quotation.quotation import QuotationModule
 
-from modules.booking.router import router as booking_router, get_booking_module, get_authn_module as get_booking_authn_module
+from modules.booking.router import router as booking_router, get_booking_module, get_authn_module as get_booking_authn_module, get_release_order_module
 from modules.booking.booking import BookingModule
+from modules.booking.release_order.release_order import ReleaseOrderModule
 
 from modules.authen.router import router as authn_router, get_authn_module
 from modules.authen.authn import AuthnModule
@@ -74,6 +75,7 @@ rate_request_service = RateRequestModule(authn_service, activity_log_service)
 liners_service = LinersModule(authn_service)
 quotation_service = QuotationModule(authn_service, activity_log_service)
 booking_service = BookingModule(authn_service, activity_log_service)
+release_order_service = ReleaseOrderModule(authn_service, activity_log_service)
 
 app.dependency_overrides[get_inquiry_module] = lambda: inquiry_service
 app.dependency_overrides[get_client_module] = lambda: client_service
@@ -87,6 +89,7 @@ app.dependency_overrides[get_quotation_module] = lambda: quotation_service
 app.dependency_overrides[get_authn_module] = lambda: authn_service
 app.dependency_overrides[get_booking_module] = lambda: booking_service
 app.dependency_overrides[get_booking_authn_module] = lambda: authn_service
+app.dependency_overrides[get_release_order_module] = lambda: release_order_service
 
 
 # routers
