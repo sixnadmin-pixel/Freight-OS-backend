@@ -7,7 +7,7 @@ class bookingRequestStatus(str, Enum):
     request_reviewed = 'request_reviewed'
     request_booking_success = 'request_booking_success'
     request_booking_failure = 'request_booking_failure'
-    release_order_received = 'release_order_received'  
+    release_order_received = 'release_order_received'
 
 class bookingRequestNew(BaseModel):
     inq_id: int 

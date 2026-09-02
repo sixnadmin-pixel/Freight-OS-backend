@@ -29,24 +29,32 @@ async def create_booking_request(
     return await service.create_new_booking_req(emp_id_cs, payload)
 
 
-@router.patch("")
+@router.patch("/{booking_id}")
 async def patch_booking_request(
+    booking_id: int,
     payload: bookingRequestPatch,
     service: IBookingModule = Depends(get_booking_module),
     authn: IAuthnModule = Depends(get_authn_module),
 ):
     updated_by = authn.get_current_user().emp_id
-    return await service.patch_booking_req(updated_by, payload)
+    return await service.patch_booking_req(booking_id, updated_by, payload)
 
 
-@router.patch("/review")
+@router.patch("/{booking_id}/review")
 async def review_booking_request(
+    booking_id: int,
     payload: bookingRequestReview,
     service: IBookingModule = Depends(get_booking_module),
-    authn: IAuthnModule = Depends(get_authn_module),
 ):
-    reviewed_by = authn.get_current_user().emp_id
-    return await service.review_booking_req(reviewed_by, payload)
+    return await service.review_booking_req(booking_id, payload)
+
+
+@router.patch("/{booking_id}/confirm")
+async def confirm_booking_success(
+    booking_id: int,
+    service: IBookingModule = Depends(get_booking_module),
+):
+    return await service.confirm_booking_success(booking_id)
 
 
 # --- Release Order ---
